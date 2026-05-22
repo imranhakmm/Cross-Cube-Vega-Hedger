@@ -1,9 +1,18 @@
 .PHONY: install lint test simulate figures site report all clean
 
-PYTHON ?= python
+PYTHON ?= .venv/bin/python
+UV ?= uv
 
 install:
-	$(PYTHON) -m pip install -e ".[dev,viz,docs]"
+	@if command -v $(UV) >/dev/null 2>&1; then \
+		$(UV) venv --python 3.11 --allow-existing .venv; \
+		$(UV) pip install --python $(PYTHON) --reinstall-package cross-cube-vega ".[dev,viz,docs]"; \
+	else \
+		python3 -m venv .venv; \
+		$(PYTHON) -m pip install --upgrade pip; \
+		$(PYTHON) -m pip install --force-reinstall --no-deps ".[dev,viz,docs]"; \
+		$(PYTHON) -m pip install ".[dev,viz,docs]"; \
+	fi
 
 lint:
 	$(PYTHON) -m ruff check src tests scripts
