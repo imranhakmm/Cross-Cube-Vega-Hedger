@@ -18,8 +18,9 @@ def reservation_vol(
 ) -> float:
     """Return a heuristic reservation volatility adjusted for factor inventory."""
 
+    scaled_inventory = inventory_factor_exposure / 1.0e7
     inventory_charge = risk_aversion * float(
-        inventory_factor_exposure @ factor_covariance @ instrument_loading
+        scaled_inventory @ factor_covariance @ instrument_loading
     ) * horizon
     return mid_vol - inventory_charge
 
@@ -34,7 +35,8 @@ def half_spread_vol_bps(
     """Return inventory-risk-inflated half-spread in vol basis points."""
 
     factor_var = max(float(instrument_loading @ factor_covariance @ instrument_loading), 0.0)
-    directional = abs(float(inventory_factor_exposure @ factor_covariance @ instrument_loading))
+    scaled_inventory = inventory_factor_exposure / 1.0e7
+    directional = abs(float(scaled_inventory @ factor_covariance @ instrument_loading))
     inventory_addon = float(1.0e4 * risk_aversion * (0.15 * np.sqrt(factor_var) + directional))
     return float(base_half_spread_vol_bps + inventory_addon)
 

@@ -152,7 +152,10 @@ def run_market_maker_simulation(settings: Settings, cube_path: CubePath) -> Mark
                 delta = float(rng.normal(0.0, delta_scale))
                 vega_first = float(pre_exposure[:3] @ shock[:3])
                 cross = float(pre_exposure[3] * shock[3])
-                cross += 0.015 * float(np.linalg.norm(pre_exposure[:3]) * np.linalg.norm(shock[:3]))
+                cross_scale = 0.010 * float(
+                    np.linalg.norm(pre_exposure[:3]) * np.linalg.norm(shock[:3])
+                )
+                cross += float(rng.normal(0.0, cross_scale))
                 hedge = apply_hedge(
                     strategy,
                     states[strategy],

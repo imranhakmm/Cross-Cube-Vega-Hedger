@@ -1,0 +1,33 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{cxvega}[2026/05/22 Silver research-note style]
+
+\RequirePackage[a4paper,margin=1.25in]{geometry}
+\RequirePackage{xcolor}
+\RequirePackage{titlesec}
+\RequirePackage{fancyhdr}
+\RequirePackage{booktabs}
+\RequirePackage{graphicx}
+\RequirePackage{microtype}
+
+\definecolor{cxcharcoal}{HTML}{1A1A1A}
+\definecolor{cxgraphite}{HTML}{3A3A3A}
+\definecolor{cxsilver}{HTML}{B8B8B8}
+\definecolor{cxoffwhite}{HTML}{F5F5F5}
+\definecolor{cxoxblood}{HTML}{7A2E2E}
+
+\pagecolor{white}
+\color{cxcharcoal}
+\titleformat{\section}{\Large\bfseries\color{cxcharcoal}}{\thesection}{0.75em}{}
+\titleformat{\subsection}{\large\bfseries\color{cxgraphite}}{\thesubsection}{0.75em}{}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small\scshape Cross-Cube Vega Hedging}
+\rhead{\small\thepage}
+\lfoot{\small Imran Hakim}
+\rfoot{\small version 0.1}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{cxsilver}\leaders\hrule height \headrulewidth\hfill}}
+\renewcommand{\footrulewidth}{0pt}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.65em}

@@ -1,0 +1,29 @@
+\documentclass[11pt]{article}
+\usepackage{style/cxvega}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\title{Cross-Cube Vega Hedging: A Swaption Market-Making Lab}
+\author{Imran Hakim}
+\date{22 May 2026}
+\begin{document}
+\maketitle
+\begin{abstract}
+Single-tenor vega is a lossy risk report for a swaption market-maker. This
+lab simulates a factor-moving swaption cube, calibrates SABR slices, and
+compares delta-only, node, bucketed, and factor-neutral hedges.
+\end{abstract}
+\section{Core thesis}
+Vega is booked per point, but the cube moves in level, slope, curvature, and
+skew factors. Hedges that zero a local number can still leak factor P\&L.
+\section{Model}
+The simulator uses Hagan SABR slices with fixed beta and OU dynamics for ATM
+log-vol, rho, and log-nu. Calibration enforces the ATM constraint and then adds
+cube smoothness and arbitrage penalties.
+\section{Results}
+See the generated figures and tables in this repository. The Python fallback
+report expands this source into the full research note when a TeX toolchain is
+not available.
+\bibliographystyle{plain}
+\bibliography{references}
+\end{document}

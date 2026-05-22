@@ -1,0 +1,15 @@
+\begin{tikzpicture}[
+  node/.style={draw=cxgraphite, rounded corners=1pt, minimum width=2.5cm,
+               minimum height=1.05cm, align=center, fill=white},
+  arrow/.style={->, thick, draw=cxoxblood}
+]
+\node[node] (sim) {Cube\\simulator};
+\node[node, right=0.9cm of sim] (cal) {SABR\\calibration};
+\node[node, right=0.9cm of cal] (pca) {PCA + factor\\analytics};
+\node[node, right=0.9cm of pca] (mm) {Market-maker\\loop};
+\node[node, right=0.9cm of mm] (pnl) {P\&L\\attribution};
+\draw[arrow] (sim) -- (cal);
+\draw[arrow] (cal) -- (pca);
+\draw[arrow] (pca) -- (mm);
+\draw[arrow] (mm) -- (pnl);
+\end{tikzpicture}

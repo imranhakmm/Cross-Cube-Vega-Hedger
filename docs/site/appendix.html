@@ -1,0 +1,111 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Appendix</title>
+  <style>
+:root {
+  --charcoal: #1a1a1a;
+  --graphite: #3a3a3a;
+  --silver: #b8b8b8;
+  --off-white: #f5f5f5;
+  --oxblood: #7a2e2e;
+}
+body {
+  margin: 0;
+  background: var(--off-white);
+  color: var(--charcoal);
+  font-family: Georgia, "Times New Roman", serif;
+}
+main {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 48px 28px 72px;
+  background: white;
+}
+nav, footer {
+  font-family: Arial, sans-serif;
+  color: var(--graphite);
+  border-bottom: 1px solid var(--silver);
+  padding: 16px 28px;
+}
+footer {
+  border-top: 1px solid var(--silver);
+  border-bottom: 0;
+}
+nav a, footer a {
+  color: var(--oxblood);
+  margin-right: 18px;
+  text-decoration: none;
+}
+h1, h2 {
+  font-weight: 500;
+  letter-spacing: 0;
+}
+h1 {
+  font-size: 42px;
+  margin: 32px 0 14px;
+}
+h2 {
+  margin-top: 42px;
+  border-top: 1px solid var(--silver);
+  padding-top: 20px;
+}
+.lede {
+  font-size: 20px;
+  line-height: 1.45;
+  color: var(--graphite);
+}
+.note {
+  float: right;
+  width: 220px;
+  margin: 0 0 24px 28px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--graphite);
+  border-left: 3px solid var(--silver);
+  padding-left: 14px;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+}
+th, td {
+  border-bottom: 1px solid #ddd;
+  padding: 8px 10px;
+  text-align: right;
+}
+th:first-child, td:first-child {
+  text-align: left;
+}
+img {
+  max-width: 100%;
+  height: auto;
+}
+</style>
+</head>
+<body>
+<nav>
+  <a href="index.html">Executive summary</a>
+  <a href="model.html">Model</a>
+  <a href="results.html">Results</a>
+  <a href="appendix.html">Appendix</a>
+</nav>
+<main>
+        <h1>Appendix</h1>
+        <p>The PCA recovery check verifies that the latent level, slope, and curvature modes can be
+        recovered from simulated cube moves before the hedging strategies are compared.</p>
+        <img src="assets/pca_recovery.png" alt="PCA recovery">
+        <p>References: Andersen and Piterbarg (2010), Hagan et al. (2002), Rebonato (2002),
+        Bergomi (2016), Avellaneda and Stoikov (2008), Gatheral (2006).</p>
+        </main>
+<footer>
+  <a href="../report/report.pdf">Read the full report (PDF)</a>
+  <a href="https://github.com/imranhakmm/Cross-Cube-Vega-Hedger">GitHub repo</a>
+</footer>
+</body>
+</html>
