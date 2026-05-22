@@ -1,15 +1,26 @@
+\begin{figure}[H]
+\centering
 \begin{tikzpicture}[
-  node/.style={draw=cxgraphite, rounded corners=1pt, minimum width=2.5cm,
-               minimum height=1.05cm, align=center, fill=white},
-  arrow/.style={->, thick, draw=cxoxblood}
+  module/.style={
+    draw=cxcharcoal,
+    fill=cxsilver!22,
+    rounded corners=3pt,
+    minimum width=2.55cm,
+    minimum height=1.05cm,
+    align=center,
+    font=\sffamily\small
+  },
+  flow/.style={-{Stealth[length=2.4mm]}, draw=cxoxblood, line width=0.8pt}
 ]
-\node[node] (sim) {Cube\\simulator};
-\node[node, right=0.9cm of sim] (cal) {SABR\\calibration};
-\node[node, right=0.9cm of cal] (pca) {PCA + factor\\analytics};
-\node[node, right=0.9cm of pca] (mm) {Market-maker\\loop};
-\node[node, right=0.9cm of mm] (pnl) {P\&L\\attribution};
-\draw[arrow] (sim) -- (cal);
-\draw[arrow] (cal) -- (pca);
-\draw[arrow] (pca) -- (mm);
-\draw[arrow] (mm) -- (pnl);
+\node[module] (sim) {Cube\\simulator};
+\node[module, right=0.85cm of sim] (cal) {SABR\\calibration};
+\node[module, right=0.85cm of cal] (pca) {PCA + factor\\analytics};
+\node[module, right=0.85cm of pca] (mm) {Market-maker\\loop};
+\node[module, right=0.85cm of mm] (pnl) {P\&L\\attribution};
+\draw[flow] (sim) -- (cal);
+\draw[flow] (cal) -- (pca);
+\draw[flow] (pca) -- (mm);
+\draw[flow] (mm) -- (pnl);
 \end{tikzpicture}
+\caption{Pipeline from simulated cube construction to calibration, factor analytics, market-making, and P\&L attribution.}
+\end{figure}

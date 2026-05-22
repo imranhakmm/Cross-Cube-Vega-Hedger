@@ -10,6 +10,7 @@ import plotly.io as pio
 from jinja2 import Template
 
 from cxvega.config import load_settings
+from cxvega.plotting import PALETTE, plotly_template, strategy_colours
 from cxvega.reporting import (
     ensure_dirs,
     generate_all_figures,
@@ -24,49 +25,52 @@ STYLE = """
   --silver: #b8b8b8;
   --off-white: #f5f5f5;
   --oxblood: #7a2e2e;
+  --teal: #2f5d56;
 }
 body {
-  margin: 0;
   background: var(--off-white);
   color: var(--charcoal);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "EB Garamond", "Source Serif Pro", Georgia, serif;
+  line-height: 1.45;
 }
 main {
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: 48px 28px 72px;
-  background: white;
+  max-width: 72rem;
+  margin-left: 8%;
+  padding: 3rem 2rem 5rem 0;
 }
 nav, footer {
-  font-family: Arial, sans-serif;
+  font-family: "Source Sans Pro", Inter, Arial, sans-serif;
   color: var(--graphite);
-  border-bottom: 1px solid var(--silver);
-  padding: 16px 28px;
+  padding: 1rem 8%;
 }
+nav { border-bottom: 1px solid var(--silver); }
 footer {
   border-top: 1px solid var(--silver);
-  border-bottom: 0;
+  font-size: 0.9rem;
 }
 nav a, footer a {
   color: var(--oxblood);
-  margin-right: 18px;
+  margin-right: 1.2rem;
   text-decoration: none;
 }
 h1, h2 {
-  font-weight: 500;
+  font-family: "Source Sans Pro", Inter, Arial, sans-serif;
+  font-weight: 600;
   letter-spacing: 0;
+  color: var(--oxblood);
 }
 h1 {
-  font-size: 42px;
-  margin: 32px 0 14px;
+  font-size: 2.6rem;
+  margin: 2rem 0 0.8rem;
 }
 h2 {
-  margin-top: 42px;
+  margin-top: 2.8rem;
   border-top: 1px solid var(--silver);
-  padding-top: 20px;
+  padding-top: 1rem;
 }
 .lede {
-  font-size: 20px;
+  max-width: 60ch;
+  font-size: 1.25rem;
   line-height: 1.45;
   color: var(--graphite);
 }
@@ -80,10 +84,13 @@ h2 {
   border-left: 3px solid var(--silver);
   padding-left: 14px;
 }
+p {
+  max-width: 60ch;
+}
 table {
   border-collapse: collapse;
-  width: 100%;
-  font-family: Arial, sans-serif;
+  max-width: 64rem;
+  font-family: "Source Sans Pro", Inter, Arial, sans-serif;
   font-size: 14px;
 }
 th, td {
@@ -97,6 +104,29 @@ th:first-child, td:first-child {
 img {
   max-width: 100%;
   height: auto;
+  margin: 1.2rem 0;
+}
+.plotly-graph-div {
+  max-width: 64rem;
+}
+"""
+
+TUFTE_CSS = """
+html { font-size: 15px; }
+body { margin: 0; counter-reset: sidenote-counter; }
+article { padding: 5rem 0; }
+section { padding-top: 1rem; padding-bottom: 1rem; }
+.sidenote, .marginnote {
+  float: right;
+  clear: right;
+  margin-right: -32%;
+  width: 28%;
+  margin-top: 0;
+  margin-bottom: 0;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  vertical-align: baseline;
+  position: relative;
 }
 """
 
@@ -108,6 +138,7 @@ PAGE_TEMPLATE = Template(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title }}</title>
+  <link rel="stylesheet" href="assets/tufte.css">
   <style>{{ style }}</style>
 </head>
 <body>
@@ -121,6 +152,7 @@ PAGE_TEMPLATE = Template(
 <footer>
   <a href="../report/report.pdf">Read the full report (PDF)</a>
   <a href="https://github.com/imranhakmm/Cross-Cube-Vega-Hedger">GitHub repo</a>
+  <span>Imran Hakim - v0.1 - 22 May 2026</span>
 </footer>
 </body>
 </html>
@@ -146,12 +178,19 @@ def _write_page(name: str, title: str, body: str) -> None:
     )
 
 
+def _write_site_css() -> None:
+    assets = Path("docs/site/assets")
+    assets.mkdir(parents=True, exist_ok=True)
+    (assets / "tufte.css").write_text(TUFTE_CSS.strip() + "\n", encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build the static HTML mini-site.")
     parser.add_argument("--config", default="configs/default.yaml")
     args = parser.parse_args()
     settings = load_settings(args.config)
     ensure_dirs()
+    _write_site_css()
     path = generate_cube(settings, steps=settings.market_maker.days)
     result = load_or_run_market_results(settings, path)
     generate_all_figures(settings, path)
@@ -163,11 +202,16 @@ def main() -> None:
         result.path_pnl,
         x="pnl",
         color="strategy",
+        color_discrete_map=strategy_colours(),
         nbins=44,
-        template="simple_white",
+        template=plotly_template(),
         title="Terminal P&L by strategy",
     )
-    hist.update_layout(font_family="Arial", paper_bgcolor="#f5f5f5", plot_bgcolor="white")
+    hist.update_layout(
+        font_family="Source Sans Pro, Inter, Arial, sans-serif",
+        paper_bgcolor=PALETTE.off_white,
+        plot_bgcolor="white",
+    )
     hist_html = pio.to_html(
         hist,
         include_plotlyjs="cdn",
@@ -180,10 +224,15 @@ def main() -> None:
         x="day",
         y="cumulative_pnl",
         color="strategy",
-        template="simple_white",
+        color_discrete_map=strategy_colours(),
+        template=plotly_template(),
         title="Representative cumulative P&L path",
     )
-    line.update_layout(font_family="Arial", paper_bgcolor="#f5f5f5", plot_bgcolor="white")
+    line.update_layout(
+        font_family="Source Sans Pro, Inter, Arial, sans-serif",
+        paper_bgcolor=PALETTE.off_white,
+        plot_bgcolor="white",
+    )
     line_html = pio.to_html(
         line,
         include_plotlyjs=False,

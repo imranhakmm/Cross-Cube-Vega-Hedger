@@ -1,29 +1,100 @@
 \documentclass[11pt]{article}
 \usepackage{style/cxvega}
-\usepackage{graphicx}
-\usepackage{booktabs}
 \usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{multicol}
+\usepackage[authoryear,backend=biber]{biblatex}
+\addbibresource{references.bib}
 \title{Cross-Cube Vega Hedging: A Swaption Market-Making Lab}
 \author{Imran Hakim}
 \date{22 May 2026}
+
 \begin{document}
-\maketitle
-\begin{abstract}
-Single-tenor vega is a lossy risk report for a swaption market-maker. This
-lab simulates a factor-moving swaption cube, calibrates SABR slices, and
-compares delta-only, node, bucketed, and factor-neutral hedges.
-\end{abstract}
-\section{Core thesis}
-Vega is booked per point, but the cube moves in level, slope, curvature, and
-skew factors. Hedges that zero a local number can still leak factor P\&L.
-\section{Model}
-The simulator uses Hagan SABR slices with fixed beta and OU dynamics for ATM
-log-vol, rho, and log-nu. Calibration enforces the ATM constraint and then adds
-cube smoothness and arbitrage penalties.
-\section{Results}
-See the generated figures and tables in this repository. The Python fallback
-report expands this source into the full research note when a TeX toolchain is
-not available.
-\bibliographystyle{plain}
-\bibliography{references}
+\cxcover
+\section*{Abstract}
+Node vega is a useful operating report, but it is not the risk basis of a
+swaption cube.  This lab simulates a SABR cube whose ATM level, slope, curvature
+and skew-wing dynamics move together, then runs a market-maker through the cube
+with four hedging policies.  The calibration exercise deliberately adds
+observation noise, so per-slice fits no longer recover the data-generating model
+mechanically.  The constrained fit pays a small local-residual cost to remove
+material cube-level static-arbitrage violations.  The market-making experiment
+then shows the trading consequence: factor-neutral hedging compresses terminal
+P\&L dispersion and improves the left tail.  The limitation is equally explicit:
+all market data are simulated, beta is fixed, and the quoting overlay is a
+factor-space heuristic rather than a full HJB solution.
+
+\section*{Executive Summary}
+Single-tenor vega is a mirage.  A book that is flat by node can still be long
+the level factor, short the expiry slope, and exposed to skew steepening.  The
+headline figure uses a same-axis P\&L overlay: delta-only is a broad distribution,
+while factor-neutral hedging is a much tighter spike.  The result is not free;
+the factor-neutral rule pays more transaction cost and depends on liquid proxy
+instruments.  It is still the hedge that best matches the cube's realised risk
+basis.
+
+\section{Introduction and Motivation}
+Market-makers manage swaption risk in cube coordinates because that is how
+quotes, controls, and end-of-day marks arrive.  The cube, however, moves in
+factors.  Bartlett's SABR delta correction is the same warning in miniature:
+the obvious hedge is wrong once model parameters co-move with the underlying.
+
+\section{Architecture}
+\input{style/architecture.tikz}
+The Python pipeline is deterministic: simulator, calibration, PCA analytics,
+market-maker loop, P\&L attribution, static site, and this report.
+
+\section{Model: The True Cube}
+\[
+\log \sigma_{\mathrm{ATM}}(T,\tau,t)=\mu(T,\tau)+
+  \sum_{i=1}^3 L_i(T,\tau)X_i(t).
+\]
+The factors follow correlated OU dynamics
+\[
+dX_i=-\kappa_i X_i\,dt+\eta_i\,dW_i,\qquad
+\mathrm{corr}(dW)=R.
+\]
+The loading shapes are a level mode, a centred log-expiry slope, and a hump
+around intermediate expiries.  Rho is bounded in $[-0.95,0]$ and log-nu
+mean-reverts, with both skew and wing shocks correlated to the level factor.
+
+\section{Calibration}
+The per-slice fit fixes beta, enforces the ATM point exactly, and fits rho and
+nu.  The joint fit adds butterfly, calendar, and smoothness penalties.  The
+arbitrage penalties dominate smoothness; this is intentionally a risk-control
+fit, not a local least-squares beauty contest.
+
+\section{Factor Recovery via PCA}
+PCA is run on simulated ATM log-vol changes, then the recovered subspace is
+rotated into the simulator's true factor labels for diagnostics.  The cosine
+similarities in the generated table quantify whether the analytics pipeline has
+found the intended level, slope, and curvature modes.
+
+\section{Hedging Strategies}
+The four policies are delta-only, single-tenor vega-flat, bucketed vega-flat, and
+factor-neutral.  The last solves a small constrained hedge over liquid cube
+points to reduce exposures to level, slope, curvature, and skew.
+
+\section{Market-Maker Simulation and Quoting}
+Client trades arrive from a Poisson process and cross the market-maker's quote.
+The reservation vol uses an Avellaneda-Stoikov-style inventory charge in factor
+space.  This is a heuristic adaptation, not an end-to-end HJB derivation.
+
+\section{Results and P\&L Attribution}
+The report tables reconcile edge, theta, delta, first-order vega, cross-vega
+slippage, and hedge transaction cost to total realised P\&L.  The result to care
+about is the distributional one: hedging the factors tightens the tail.
+
+\section{Assumptions and Limitations}
+The lab uses simulated data only, single-curve discounting, fixed beta, no
+jumps, daily hedging, perfectly observed mids, and no strategic client response.
+
+\section{Extensions}
+Natural extensions are real-data overlays, rough-vol dynamics, multi-curve
+discounting, joint cap-swaption calibration, Bermudan exercise, IDB-aware
+quoting, and a learning layer over the factor state.
+
+\printbibliography
 \end{document}

@@ -5,6 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Appendix</title>
+  <link rel="stylesheet" href="assets/tufte.css">
   <style>
 :root {
   --charcoal: #1a1a1a;
@@ -12,49 +13,52 @@
   --silver: #b8b8b8;
   --off-white: #f5f5f5;
   --oxblood: #7a2e2e;
+  --teal: #2f5d56;
 }
 body {
-  margin: 0;
   background: var(--off-white);
   color: var(--charcoal);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "EB Garamond", "Source Serif Pro", Georgia, serif;
+  line-height: 1.45;
 }
 main {
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: 48px 28px 72px;
-  background: white;
+  max-width: 72rem;
+  margin-left: 8%;
+  padding: 3rem 2rem 5rem 0;
 }
 nav, footer {
-  font-family: Arial, sans-serif;
+  font-family: "Source Sans Pro", Inter, Arial, sans-serif;
   color: var(--graphite);
-  border-bottom: 1px solid var(--silver);
-  padding: 16px 28px;
+  padding: 1rem 8%;
 }
+nav { border-bottom: 1px solid var(--silver); }
 footer {
   border-top: 1px solid var(--silver);
-  border-bottom: 0;
+  font-size: 0.9rem;
 }
 nav a, footer a {
   color: var(--oxblood);
-  margin-right: 18px;
+  margin-right: 1.2rem;
   text-decoration: none;
 }
 h1, h2 {
-  font-weight: 500;
+  font-family: "Source Sans Pro", Inter, Arial, sans-serif;
+  font-weight: 600;
   letter-spacing: 0;
+  color: var(--oxblood);
 }
 h1 {
-  font-size: 42px;
-  margin: 32px 0 14px;
+  font-size: 2.6rem;
+  margin: 2rem 0 0.8rem;
 }
 h2 {
-  margin-top: 42px;
+  margin-top: 2.8rem;
   border-top: 1px solid var(--silver);
-  padding-top: 20px;
+  padding-top: 1rem;
 }
 .lede {
-  font-size: 20px;
+  max-width: 60ch;
+  font-size: 1.25rem;
   line-height: 1.45;
   color: var(--graphite);
 }
@@ -68,10 +72,13 @@ h2 {
   border-left: 3px solid var(--silver);
   padding-left: 14px;
 }
+p {
+  max-width: 60ch;
+}
 table {
   border-collapse: collapse;
-  width: 100%;
-  font-family: Arial, sans-serif;
+  max-width: 64rem;
+  font-family: "Source Sans Pro", Inter, Arial, sans-serif;
   font-size: 14px;
 }
 th, td {
@@ -85,6 +92,10 @@ th:first-child, td:first-child {
 img {
   max-width: 100%;
   height: auto;
+  margin: 1.2rem 0;
+}
+.plotly-graph-div {
+  max-width: 64rem;
 }
 </style>
 </head>
@@ -106,6 +117,7 @@ img {
 <footer>
   <a href="../report/report.pdf">Read the full report (PDF)</a>
   <a href="https://github.com/imranhakmm/Cross-Cube-Vega-Hedger">GitHub repo</a>
+  <span>Imran Hakim - v0.1 - 22 May 2026</span>
 </footer>
 </body>
 </html>

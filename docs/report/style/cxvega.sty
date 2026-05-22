@@ -2,12 +2,17 @@
 \ProvidesPackage{cxvega}[2026/05/22 Silver research-note style]
 
 \RequirePackage[a4paper,margin=1.25in]{geometry}
-\RequirePackage{xcolor}
-\RequirePackage{titlesec}
-\RequirePackage{fancyhdr}
+\RequirePackage{amsmath}
 \RequirePackage{booktabs}
+\RequirePackage{caption}
+\RequirePackage{fancyhdr}
+\RequirePackage{fontspec}
 \RequirePackage{graphicx}
 \RequirePackage{microtype}
+\RequirePackage{tikz}
+\RequirePackage{xcolor}
+\RequirePackage{titlesec}
+\usetikzlibrary{arrows.meta,positioning}
 
 \definecolor{cxcharcoal}{HTML}{1A1A1A}
 \definecolor{cxgraphite}{HTML}{3A3A3A}
@@ -15,19 +20,75 @@
 \definecolor{cxoffwhite}{HTML}{F5F5F5}
 \definecolor{cxoxblood}{HTML}{7A2E2E}
 
-\pagecolor{white}
+\IfFontExistsTF{EB Garamond}
+  {\setmainfont{EB Garamond}}
+  {\setmainfont{Source Serif Pro}}
+\IfFontExistsTF{Source Sans Pro}
+  {\setsansfont{Source Sans Pro}}
+  {\setsansfont{Inter}}
+\IfFontExistsTF{JetBrains Mono}
+  {\setmonofont{JetBrains Mono}}
+  {\setmonofont{Fira Code}}
+
+\linespread{1.15}
 \color{cxcharcoal}
-\titleformat{\section}{\Large\bfseries\color{cxcharcoal}}{\thesection}{0.75em}{}
-\titleformat{\subsection}{\large\bfseries\color{cxgraphite}}{\thesubsection}{0.75em}{}
+\pagecolor{white}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+
+\titleformat{\section}
+  {\sffamily\fontsize{14}{16}\bfseries\color{cxcharcoal}}
+  {\thesection}{0.75em}{}
+\titleformat{\subsection}
+  {\sffamily\fontsize{12}{14}\bfseries\color{cxgraphite}}
+  {\thesubsection}{0.75em}{}
+\captionsetup{font={small,it},labelfont={bf},singlelinecheck=false}
+
 \pagestyle{fancy}
 \fancyhf{}
-\lhead{\small\scshape Cross-Cube Vega Hedging}
-\rhead{\small\thepage}
-\lfoot{\small Imran Hakim}
-\rfoot{\small version 0.1}
+\lhead{\sffamily\small\scshape CROSS-CUBE VEGA HEDGING}
+\rhead{\sffamily\small\thepage}
+\lfoot{\sffamily\scriptsize\color{cxgraphite} Imran Hakim - v0.1}
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\headrule}{\hbox to\headwidth{\color{cxsilver}\leaders\hrule height \headrulewidth\hfill}}
 \renewcommand{\footrulewidth}{0pt}
 
-\setlength{\parindent}{0pt}
-\setlength{\parskip}{0.65em}
+\newcommand{\cxcover}{%
+  \thispagestyle{empty}
+  \begin{tikzpicture}[remember picture,overlay]
+    \fill[cxcharcoal] (current page.south west) rectangle (current page.north east);
+    \node[anchor=west,text=cxsilver,font=\fontsize{34}{38}\selectfont\rmfamily]
+      at ([xshift=1.25in,yshift=-2.55in]current page.north west)
+      {Cross-Cube Vega Hedging};
+    \node[anchor=west,text=cxoffwhite,font=\fontsize{18}{22}\selectfont\rmfamily]
+      at ([xshift=1.25in,yshift=-3.12in]current page.north west)
+      {A Swaption Market-Making Lab};
+    \draw[cxsilver,line width=0.8pt]
+      ([xshift=1.25in,yshift=-3.55in]current page.north west) --
+      ([xshift=5.75in,yshift=-3.55in]current page.north west);
+    \node[anchor=west,text=cxoffwhite,font=\sffamily\small]
+      at ([xshift=1.25in,yshift=-4.15in]current page.north west)
+      {Imran Hakim};
+    \node[anchor=west,text=cxsilver,font=\sffamily\small]
+      at ([xshift=1.25in,yshift=-4.48in]current page.north west)
+      {Independent research - produced as a portfolio artefact};
+    \node[anchor=west,text=cxsilver,font=\sffamily\small]
+      at ([xshift=1.25in,yshift=-4.80in]current page.north west)
+      {22 May 2026};
+    \begin{scope}[shift={([xshift=-2.25in,yshift=1.35in]current page.south east)},
+      scale=2.2,opacity=0.30]
+      \coordinate (a) at (0,0);
+      \coordinate (b) at (1,0);
+      \coordinate (c) at (1,1);
+      \coordinate (d) at (0,1);
+      \coordinate (e) at (0.35,0.35);
+      \coordinate (f) at (1.35,0.35);
+      \coordinate (g) at (1.35,1.35);
+      \coordinate (h) at (0.35,1.35);
+      \draw[cxsilver,line width=0.55pt] (a)--(b)--(c)--(d)--cycle;
+      \draw[cxsilver,line width=0.55pt] (e)--(f)--(g)--(h)--cycle;
+      \draw[cxsilver,line width=0.55pt] (a)--(e) (b)--(f) (c)--(g) (d)--(h);
+    \end{scope}
+  \end{tikzpicture}
+  \clearpage
+}

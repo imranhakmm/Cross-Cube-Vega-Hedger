@@ -1,0 +1,16 @@
+html { font-size: 15px; }
+body { margin: 0; counter-reset: sidenote-counter; }
+article { padding: 5rem 0; }
+section { padding-top: 1rem; padding-bottom: 1rem; }
+.sidenote, .marginnote {
+  float: right;
+  clear: right;
+  margin-right: -32%;
+  width: 28%;
+  margin-top: 0;
+  margin-bottom: 0;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  vertical-align: baseline;
+  position: relative;
+}

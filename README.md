@@ -14,7 +14,8 @@ A market-maker can flatten reported node vega and still carry a large exposure t
 ATM level, expiry slope, curvature, and skew. This repo simulates that problem end to end with a
 SABR swaption cube, a client-flow market-maker, four hedging rules, and reconciled P&L attribution.
 In the baseline run, delta-only earns the most spread but has the widest left tail; factor-neutral
-hedging gives up some edge and pays hedge cost, but cuts dispersion sharply and improves the 5% tail.
+hedging gives up some edge and pays hedge cost, but cuts dispersion sharply and pulls the 5% tail
+close to flat.
 
 ## Repo Layout
 
@@ -53,10 +54,10 @@ Baseline terminal P&L across 1000 paths and 252 trading days:
 
 | Strategy | Mean ($mm) | Std ($mm) | 5% VaR ($mm) | Sharpe |
 |---|---:|---:|---:|---:|
-| Delta-only | 32.64 | 70.38 | -75.60 | 0.46 |
-| Single-tenor vega-flat | 20.58 | 37.49 | -41.45 | 0.55 |
-| Bucketed vega-flat | 15.73 | 22.34 | -19.81 | 0.70 |
-| Factor-neutral | 15.27 | 6.42 | 5.06 | 2.38 |
+| Delta-only | 30.66 | 70.57 | -77.49 | 0.43 |
+| Single-tenor vega-flat | 15.73 | 37.53 | -46.12 | 0.42 |
+| Bucketed vega-flat | 10.50 | 22.32 | -25.00 | 0.47 |
+| Factor-neutral | 9.69 | 6.37 | -0.46 | 1.52 |
 
 ## Assumptions
 
