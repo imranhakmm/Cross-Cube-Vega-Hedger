@@ -9,8 +9,8 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import least_squares, minimize
 
-from cxvega.arb_checks import check_cube_static_arbitrage
-from cxvega.pricers import hagan_lognormal_sabr_vol, sabr_alpha_from_atm_lognormal
+from cxvega.arb_checks import ArbReport, check_cube_static_arbitrage
+from cxvega.pricers import black76_price, hagan_lognormal_sabr_vol, sabr_alpha_from_atm_lognormal
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,19 @@ class CalibrationResult:
     residuals: NDArray[np.float64]
     success: bool
     objective: float
+
+
+def apply_observation_noise(
+    vols: NDArray[np.float64],
+    rng: np.random.Generator,
+    log_sigma: float,
+) -> NDArray[np.float64]:
+    """Apply multiplicative lognormal observation noise to quoted market vols."""
+
+    if log_sigma <= 0.0:
+        return vols.copy()
+    eps = rng.normal(0.0, log_sigma, size=vols.shape)
+    return vols * np.exp(eps)
 
 
 def _rho_from_raw(raw: float | NDArray[np.float64]) -> float | NDArray[np.float64]:
@@ -121,6 +134,87 @@ def _smoothness_penalty(grid: NDArray[np.float64]) -> float:
     return penalty
 
 
+def _smooth_grid(grid: NDArray[np.float64], passes: int = 2) -> NDArray[np.float64]:
+    smoothed = grid.copy()
+    for _ in range(passes):
+        updated = smoothed.copy()
+        for i in range(grid.shape[0]):
+            for j in range(grid.shape[1]):
+                neighbours = [smoothed[i, j]]
+                if i > 0:
+                    neighbours.append(smoothed[i - 1, j])
+                if i + 1 < grid.shape[0]:
+                    neighbours.append(smoothed[i + 1, j])
+                if j > 0:
+                    neighbours.append(smoothed[i, j - 1])
+                if j + 1 < grid.shape[1]:
+                    neighbours.append(smoothed[i, j + 1])
+                updated[i, j] = float(np.mean(neighbours))
+        smoothed = updated
+    return smoothed
+
+
+def _violation_score(report: ArbReport) -> tuple[int, float]:
+    return report.count, float(sum(violation.magnitude for violation in report.violations))
+
+
+def _repair_calendar_violations(
+    forwards: NDArray[np.float64],
+    annuities: NDArray[np.float64],
+    strikes: NDArray[np.float64],
+    expiries: NDArray[np.float64],
+    vols: NDArray[np.float64],
+    tol: float = 1.0e-7,
+    max_passes: int = 20,
+) -> NDArray[np.float64]:
+    repaired = vols.copy()
+    for _ in range(max_passes):
+        report = check_cube_static_arbitrage(
+            forwards, annuities, strikes, expiries, repaired, tol=tol
+        )
+        calendar_violations = [
+            violation for violation in report.violations if violation.kind == "calendar"
+        ]
+        if not calendar_violations:
+            break
+        for violation in calendar_violations:
+            i = violation.expiry_index
+            j = violation.tenor_index
+            k = violation.strike_index
+            previous_price = float(
+                black76_price(
+                    float(forwards[i - 1, j]),
+                    float(strikes[i - 1, j, k]),
+                    float(expiries[i - 1]),
+                    float(repaired[i - 1, j, k]),
+                    float(annuities[i - 1, j]),
+                )
+            )
+            candidate_vol = float(repaired[i, j, k])
+            candidate_price = float(
+                black76_price(
+                    float(forwards[i, j]),
+                    float(strikes[i, j, k]),
+                    float(expiries[i]),
+                    candidate_vol,
+                    float(annuities[i, j]),
+                )
+            )
+            while candidate_price + tol < previous_price and candidate_vol < 5.0:
+                candidate_vol += 0.0005
+                candidate_price = float(
+                    black76_price(
+                        float(forwards[i, j]),
+                        float(strikes[i, j, k]),
+                        float(expiries[i]),
+                        candidate_vol,
+                        float(annuities[i, j]),
+                    )
+                )
+            repaired[i, j, k] = candidate_vol
+    return repaired
+
+
 def calibrate_cube_joint(
     forwards: NDArray[np.float64],
     annuities: NDArray[np.float64],
@@ -138,7 +232,11 @@ def calibrate_cube_joint(
     initial = calibrate_cube_per_slice(forwards, strikes, expiries, market_vols, beta)
     n_expiry, n_tenor, n_strike = market_vols.shape
     atm_indices = np.argmin(np.abs(strikes - forwards[:, :, None]), axis=2)
-    atm_vols = market_vols[np.arange(n_expiry)[:, None], np.arange(n_tenor)[None, :], atm_indices]
+    atm_vols = market_vols[
+        np.arange(n_expiry)[:, None],
+        np.arange(n_tenor)[None, :],
+        atm_indices,
+    ]
     x0 = np.concatenate(
         [np.vectorize(_raw_from_rho)(initial.rho).ravel(), np.log(initial.nu).ravel()]
     )
@@ -185,10 +283,14 @@ def calibrate_cube_joint(
         report = check_cube_static_arbitrage(
             forwards, annuities, strikes, expiries, vols, tol=1.0e-7
         )
-        arb_loss = sum(v.magnitude**2 for v in report.violations)
-        return residual_loss + smoothness_weight * smooth_loss + (
-            butterfly_weight + calendar_weight
-        ) * arb_loss
+        butterfly_loss = sum(v.magnitude**2 for v in report.violations if v.kind == "butterfly")
+        calendar_loss = sum(v.magnitude**2 for v in report.violations if v.kind == "calendar")
+        return (
+            residual_loss
+            + smoothness_weight * smooth_loss
+            + butterfly_weight * butterfly_loss
+            + calendar_weight * calendar_loss
+        )
 
     result = minimize(
         objective,
@@ -196,8 +298,52 @@ def calibrate_cube_joint(
         method="SLSQP",
         options={"maxiter": maxiter, "ftol": 1.0e-10},
     )
-    alpha, rho, vols = build(cast(NDArray[np.float64], result.x))
-    _, nu = unpack(cast(NDArray[np.float64], result.x))
+    candidates: list[
+        tuple[
+            NDArray[np.float64],
+            NDArray[np.float64],
+            NDArray[np.float64],
+            NDArray[np.float64],
+            float,
+        ]
+    ] = []
+    opt_x = cast(NDArray[np.float64], result.x)
+    opt_nu = unpack(opt_x)[1]
+    candidates.append((*build(opt_x), opt_nu, float(result.fun)))
+
+    opt_rho, opt_nu = unpack(opt_x)
+    smooth_rho = _smooth_grid(opt_rho, passes=3)
+    smooth_log_nu = _smooth_grid(np.log(opt_nu), passes=3)
+    for blend in (0.25, 0.50, 0.75, 1.00):
+        candidate_rho = (1.0 - blend) * opt_rho + blend * smooth_rho
+        candidate_log_nu = (1.0 - blend) * np.log(opt_nu) + blend * smooth_log_nu
+        candidate_x = np.concatenate(
+            [np.vectorize(_raw_from_rho)(candidate_rho).ravel(), candidate_log_nu.ravel()]
+        )
+        candidate_nu = unpack(candidate_x)[1]
+        candidates.append((*build(candidate_x), candidate_nu, objective(candidate_x)))
+
+    def rank_candidate(
+        candidate: tuple[
+            NDArray[np.float64],
+            NDArray[np.float64],
+            NDArray[np.float64],
+            NDArray[np.float64],
+            float,
+        ],
+    ) -> tuple[int, float, float]:
+        _candidate_alpha, _candidate_rho, candidate_vols, _candidate_nu, candidate_objective = (
+            candidate
+        )
+        report = check_cube_static_arbitrage(
+            forwards, annuities, strikes, expiries, candidate_vols, tol=1.0e-7
+        )
+        count, magnitude = _violation_score(report)
+        residual_rms = float(np.sqrt(np.mean((candidate_vols - market_vols) ** 2)))
+        return count, magnitude + 1.0e-3 * residual_rms, candidate_objective
+
+    alpha, rho, vols, nu, objective_value = min(candidates, key=rank_candidate)
+    vols = _repair_calendar_violations(forwards, annuities, strikes, expiries, vols, tol=1.0e-4)
     residuals = vols - market_vols
     return CalibrationResult(
         alpha=alpha,
@@ -206,5 +352,5 @@ def calibrate_cube_joint(
         vols=vols,
         residuals=residuals,
         success=bool(result.success),
-        objective=float(result.fun),
+        objective=float(objective_value),
     )

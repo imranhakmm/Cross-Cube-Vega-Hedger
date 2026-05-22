@@ -72,6 +72,14 @@ class CalibrationConfig(BaseModel):
     joint_calendar_weight: float = 0.25
 
 
+class ObservationNoiseConfig(BaseModel):
+    """Observed quote noise controls for diagnostics."""
+
+    model_config = ConfigDict(frozen=True)
+
+    calibration_vol_log_sigma: float = 0.005
+
+
 class MarketMakerConfig(BaseModel):
     """Controls for the market-making experiment."""
 
@@ -84,7 +92,7 @@ class MarketMakerConfig(BaseModel):
     notional_sigma: float = 0.65
     base_half_spread_vol_bps: float = 0.75
     hedge_cost_vol_bps: float = 0.35
-    risk_aversion: float = 0.85
+    risk_aversion: float = 1.0
     shock_scale: float = 0.85
     liquid_expiry_indices: list[int] = Field(default_factory=list)
     liquid_tenor_indices: list[int] = Field(default_factory=list)
@@ -109,6 +117,7 @@ class Settings(BaseModel):
     rates: RatesConfig
     simulator: SimulatorConfig
     calibration: CalibrationConfig
+    observation_noise: ObservationNoiseConfig
     market_maker: MarketMakerConfig
     report: ReportConfig
 

@@ -9,16 +9,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
-from matplotlib.patches import Rectangle
+from matplotlib.patches import FancyBboxPatch
 from numpy.typing import NDArray
 
 from cxvega.analytics import recover_pca_factors
 from cxvega.arb_checks import check_cube_static_arbitrage
-from cxvega.calibration import calibrate_cube_joint, calibrate_cube_per_slice
+from cxvega.calibration import (
+    apply_observation_noise,
+    calibrate_cube_joint,
+    calibrate_cube_per_slice,
+)
 from cxvega.config import Settings
 from cxvega.market_maker import MarketMakerResult, factor_covariance, run_market_maker_simulation
 from cxvega.plotting import PALETTE, apply_style, strategy_colours
 from cxvega.quoting import spread_heatmap
+from cxvega.rng import rng_for
 from cxvega.simulator import CubePath, simulate_cube_path
 
 
@@ -127,11 +132,12 @@ def architecture_figure() -> Path:
     ]
     xs = np.linspace(0.08, 0.92, len(labels))
     for index, (x_pos, label) in enumerate(zip(xs, labels, strict=True)):
-        rect = Rectangle(
+        rect = FancyBboxPatch(
             (x_pos - 0.075, 0.38),
             0.15,
             0.28,
-            facecolor="white",
+            boxstyle="round,pad=0.015,rounding_size=0.018",
+            facecolor="#eeeeee",
             edgecolor=PALETTE.graphite,
             linewidth=1.2,
         )
@@ -156,11 +162,12 @@ def architecture_figure() -> Path:
     fig_svg, ax_svg = plt.subplots(figsize=(11, 3.4), constrained_layout=True)
     ax_svg.axis("off")
     for index, (x_pos, label) in enumerate(zip(xs, labels, strict=True)):
-        rect = Rectangle(
+        rect = FancyBboxPatch(
             (x_pos - 0.075, 0.38),
             0.15,
             0.28,
-            facecolor="white",
+            boxstyle="round,pad=0.015,rounding_size=0.018",
+            facecolor="#eeeeee",
             edgecolor=PALETTE.graphite,
             linewidth=1.2,
         )
@@ -198,11 +205,16 @@ def plot_atm_cube_snapshots(path: CubePath) -> Path:
     return _save_figure(fig, "atm_cube_snapshots.png")
 
 
-def calibration_diagnostics(path: CubePath) -> tuple[Path, pd.DataFrame]:
+def calibration_diagnostics(path: CubePath, settings: Settings) -> tuple[Path, pd.DataFrame]:
     """Generate calibration residual heatmaps and arbitrage count table."""
 
     apply_style()
-    market = path.vols[min(5, path.vols.shape[0] - 1)]
+    true_market = path.vols[min(5, path.vols.shape[0] - 1)]
+    market = apply_observation_noise(
+        true_market,
+        rng_for(settings.seed, "calibration-observation-noise"),
+        settings.observation_noise.calibration_vol_log_sigma,
+    )
     per = calibrate_cube_per_slice(path.forwards, path.strikes, path.expiries, market, path.beta)
     joint = calibrate_cube_joint(
         path.forwards,
@@ -211,13 +223,17 @@ def calibration_diagnostics(path: CubePath) -> tuple[Path, pd.DataFrame]:
         path.expiries,
         market,
         path.beta,
-        maxiter=35,
+        smoothness_weight=settings.calibration.joint_smoothness_weight,
+        butterfly_weight=settings.calibration.joint_butterfly_weight,
+        calendar_weight=settings.calibration.joint_calendar_weight,
+        maxiter=55,
     )
+    arb_tol = 1.0e-4
     per_report = check_cube_static_arbitrage(
-        path.forwards, path.annuities, path.strikes, path.expiries, per.vols, tol=1.0e-7
+        path.forwards, path.annuities, path.strikes, path.expiries, per.vols, tol=arb_tol
     )
     joint_report = check_cube_static_arbitrage(
-        path.forwards, path.annuities, path.strikes, path.expiries, joint.vols, tol=1.0e-7
+        path.forwards, path.annuities, path.strikes, path.expiries, joint.vols, tol=arb_tol
     )
     table = pd.DataFrame(
         [
@@ -225,6 +241,9 @@ def calibration_diagnostics(path: CubePath) -> tuple[Path, pd.DataFrame]:
             {"fit": "Cube-constrained", "violations": joint_report.count, **joint_report.by_kind()},
         ]
     ).fillna(0)
+    for column in table.columns:
+        if column != "fit":
+            table[column] = table[column].astype(int)
     table.to_csv("outputs/tables/arb_violation_counts.csv", index=False)
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
@@ -240,6 +259,8 @@ def calibration_diagnostics(path: CubePath) -> tuple[Path, pd.DataFrame]:
         ax.set_xlabel("Swap tenor")
         ax.set_ylabel("Option expiry")
         fig.colorbar(image, ax=ax, label="vol bp")
+    fig.savefig("outputs/figures/calibration_residuals.png")
+    fig.savefig("docs/report/figures/calibration_residuals.png")
     return _save_figure(fig, "calibration_residual_heatmaps.png"), table
 
 
@@ -255,11 +276,28 @@ def pca_figure(path: CubePath) -> Path:
     axes[0].set_xlabel("Principal component")
     axes[0].set_ylabel("Explained variance (%)")
     axes[0].set_title("PCA Variance")
+    colours = [PALETTE.graphite, PALETTE.pine, PALETTE.oxblood]
     for k, label in enumerate(["Level", "Slope", "Curvature"]):
         true_shape = np.mean(recovery.true_loadings[:, :, k], axis=1)
         recovered_shape = np.mean(recovery.recovered_loadings[:, :, k], axis=1)
-        axes[1].plot(x, true_shape, color=PALETTE.graphite, linestyle="-", alpha=0.65)
-        axes[1].plot(x, recovered_shape, label=label, linestyle="--")
+        true_shape = true_shape / max(float(np.linalg.norm(true_shape)), 1.0e-12)
+        recovered_shape = recovered_shape / max(float(np.linalg.norm(recovered_shape)), 1.0e-12)
+        axes[1].plot(
+            x,
+            recovered_shape,
+            color=colours[k],
+            linewidth=1.5,
+            alpha=0.58,
+        )
+        axes[1].plot(
+            x,
+            true_shape,
+            color=colours[k],
+            linestyle="--",
+            label=label,
+            linewidth=1.9,
+            alpha=0.95,
+        )
     axes[1].set_xticks(x, path.expiry_labels)
     axes[1].set_title("True vs Recovered Loading Shapes")
     axes[1].set_xlabel("Option expiry")
@@ -295,13 +333,55 @@ def representative_path_figure(result: MarketMakerResult) -> Path:
     return _save_figure(fig, "representative_mm_path.png")
 
 
-def pnl_distribution_figure(result: MarketMakerResult) -> Path:
+def headline_pnl_distribution_figure(result: MarketMakerResult) -> Path:
+    """Plot same-axis terminal P&L distributions for all strategies."""
+
+    apply_style()
+    colours = strategy_colours()
+    strategies = list(colours)
+    fig, ax = plt.subplots(figsize=(11, 5.2), constrained_layout=True)
+    all_values = result.path_pnl["pnl"].to_numpy(dtype=float) / 1.0e6
+    x_min = float(np.floor(np.min(all_values) / 25.0) * 25.0)
+    x_max = float(np.ceil(np.max(all_values) / 25.0) * 25.0)
+    bins = np.linspace(x_min, x_max, 58).tolist()
+    for strategy in strategies:
+        values = result.path_pnl.loc[
+            result.path_pnl["strategy"] == strategy,
+            "pnl",
+        ].to_numpy(dtype=float) / 1.0e6
+        ax.hist(
+            values,
+            bins=bins,
+            density=True,
+            color=colours[strategy],
+            alpha=0.34,
+            label=strategy,
+        )
+        ax.axvline(
+            float(np.mean(values)),
+            color=colours[strategy],
+            linestyle="--",
+            linewidth=1.35,
+        )
+    ax.axvline(0.0, color=PALETTE.silver, linewidth=0.9)
+    ax.set_xlim(x_min, x_max)
+    ax.set_title("Terminal P&L Distribution: Same-Axis Overlay")
+    ax.set_xlabel("Terminal P&L ($mm)")
+    ax.set_ylabel("Density")
+    ax.legend(ncols=2)
+    return _save_figure(fig, "headline_pnl_dist.png")
+
+
+def pnl_distribution_small_multiples_figure(result: MarketMakerResult) -> Path:
     """Plot side-by-side terminal P&L distributions for all strategies."""
 
     apply_style()
     colours = strategy_colours()
     strategies = list(colours)
     fig, axes = plt.subplots(1, 4, figsize=(14, 3.6), sharey=True, constrained_layout=True)
+    all_values = result.path_pnl["pnl"].to_numpy(dtype=float) / 1.0e6
+    x_min = float(np.floor(np.min(all_values) / 25.0) * 25.0)
+    x_max = float(np.ceil(np.max(all_values) / 25.0) * 25.0)
     for ax, strategy in zip(axes, strategies, strict=True):
         values = result.path_pnl.loc[
             result.path_pnl["strategy"] == strategy,
@@ -309,12 +389,12 @@ def pnl_distribution_figure(result: MarketMakerResult) -> Path:
         ].to_numpy(dtype=float)
         ax.hist(values / 1.0e6, bins=34, color=colours[strategy], alpha=0.86)
         ax.axvline(np.mean(values) / 1.0e6, color=PALETTE.charcoal, linewidth=1.2)
+        ax.set_xlim(x_min, x_max)
         ax.set_title(strategy)
         ax.set_xlabel("$mm")
     axes[0].set_ylabel("Path count")
     fig.suptitle("Terminal P&L Distribution Across Monte Carlo Paths")
-    headline = _save_figure(fig, "headline_pnl_dist.png")
-    return headline
+    return _save_figure(fig, "pnl_dist_small_multiples.png")
 
 
 def attribution_figure(result: MarketMakerResult) -> Path:
@@ -353,7 +433,7 @@ def quoting_heatmap_figure(settings: Settings, cov: NDArray[np.float64]) -> Path
     """Plot quoted half-spread versus level and skew inventory exposure."""
 
     apply_style()
-    grid = np.linspace(-5.0e6, 5.0e6, 41)
+    grid = np.linspace(-3.0e8, 3.0e8, 61)
     loading = np.array([1.0, 0.0, 0.0, 0.35], dtype=float)
     heat = spread_heatmap(
         settings.market_maker.base_half_spread_vol_bps,
@@ -379,6 +459,8 @@ def quoting_heatmap_figure(settings: Settings, cov: NDArray[np.float64]) -> Path
     ax.set_ylabel("Level factor exposure ($mm vega units)")
     ax.set_title("Inventory-Inflated Quoting Half-Spread")
     fig.colorbar(image, ax=ax, label="half-spread (vol bp)")
+    fig.savefig("outputs/figures/quoting_heatmap.png")
+    fig.savefig("docs/report/figures/quoting_heatmap.png")
     return _save_figure(fig, "quoting_half_spread_heatmap.png")
 
 
@@ -391,10 +473,11 @@ def generate_all_figures(settings: Settings, path: CubePath | None = None) -> li
     outputs: list[Path] = [
         architecture_figure(),
         plot_atm_cube_snapshots(cube_path),
-        calibration_diagnostics(cube_path)[0],
+        calibration_diagnostics(cube_path, settings)[0],
         pca_figure(cube_path),
         representative_path_figure(result),
-        pnl_distribution_figure(result),
+        headline_pnl_distribution_figure(result),
+        pnl_distribution_small_multiples_figure(result),
         attribution_figure(result),
         quoting_heatmap_figure(settings, result.factor_covariance),
     ]

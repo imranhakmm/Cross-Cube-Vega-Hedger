@@ -12,7 +12,7 @@ def main() -> None:
     args = parser.parse_args()
     settings = load_settings(args.config)
     path = generate_cube(settings, steps=12)
-    figure, table = calibration_diagnostics(path)
+    figure, table = calibration_diagnostics(path, settings)
     print(f"wrote {figure} and {len(table)} calibration diagnostic rows")
 
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from itertools import permutations
 from typing import cast
 
 import numpy as np
@@ -42,29 +41,23 @@ def recover_pca_factors(path: CubePath, n_components: int = 3) -> PCARecovery:
     pca = PCA(n_components=n_components, random_state=0)
     scores = cast(NDArray[np.float64], pca.fit_transform(returns))
     components = cast(NDArray[np.float64], pca.components_).T
-    true = path.loadings.reshape(-1, 3)
-    aligned = np.empty_like(components)
-    similarity_matrix = np.empty((n_components, n_components), dtype=float)
-    for component_index in range(n_components):
-        for factor_index in range(n_components):
-            similarity_matrix[component_index, factor_index] = _cosine_similarity(
-                components[:, component_index],
-                true[:, factor_index],
-            )
+    components /= np.linalg.norm(components, axis=0, keepdims=True)
+    true = path.loadings.reshape(-1, 3)[:, :n_components].copy()
+    true /= np.linalg.norm(true, axis=0, keepdims=True)
 
-    best_assignment = max(
-        permutations(range(n_components)),
-        key=lambda assignment: sum(
-            abs(similarity_matrix[component_index, factor_index])
-            for component_index, factor_index in enumerate(assignment)
-        ),
-    )
+    recovered = components @ (components.T @ true)
+    recovered /= np.linalg.norm(recovered, axis=0, keepdims=True)
+    aligned = recovered
     similarities = np.empty(n_components, dtype=float)
-    for component_index, factor_index in enumerate(best_assignment):
-        similarity = similarity_matrix[component_index, factor_index]
-        sign = 1.0 if similarity >= 0.0 else -1.0
-        aligned[:, factor_index] = sign * components[:, component_index]
-        similarities[factor_index] = abs(similarity)
+    for factor_index in range(n_components):
+        largest_true_index = int(np.argmax(np.abs(true[:, factor_index])))
+        if np.sign(aligned[largest_true_index, factor_index]) != np.sign(
+            true[largest_true_index, factor_index]
+        ):
+            aligned[:, factor_index] *= -1.0
+        similarities[factor_index] = _cosine_similarity(
+            aligned[:, factor_index], true[:, factor_index]
+        )
     return PCARecovery(
         explained_variance=cast(NDArray[np.float64], pca.explained_variance_ratio_),
         recovered_loadings=aligned.reshape(path.n_expiries, path.n_tenors, n_components),

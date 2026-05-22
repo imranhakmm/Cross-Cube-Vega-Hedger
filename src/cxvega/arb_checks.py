@@ -64,14 +64,23 @@ def cube_prices_from_vols(
     return prices
 
 
-def check_butterfly(prices: NDArray[np.float64], tol: float = 1.0e-8) -> list[ArbViolation]:
+def check_butterfly(
+    prices: NDArray[np.float64],
+    strikes: NDArray[np.float64] | None = None,
+    tol: float = 1.0e-8,
+) -> list[ArbViolation]:
     """Check convexity of payer prices across strikes within each slice."""
 
     violations: list[ArbViolation] = []
-    second_diff = prices[:, :, :-2] - 2.0 * prices[:, :, 1:-1] + prices[:, :, 2:]
-    indices = np.argwhere(second_diff < -tol)
+    if strikes is None:
+        strike_steps = np.ones_like(np.diff(prices, axis=2))
+    else:
+        strike_steps = np.diff(strikes, axis=2)
+    slopes = np.diff(prices, axis=2) / strike_steps
+    slope_diff = np.diff(slopes, axis=2)
+    indices = np.argwhere(slope_diff < -tol)
     for expiry_index, tenor_index, local_strike_index in indices:
-        magnitude = float(-second_diff[expiry_index, tenor_index, local_strike_index])
+        magnitude = float(-slope_diff[expiry_index, tenor_index, local_strike_index])
         violations.append(
             ArbViolation(
                 "butterfly",
@@ -115,5 +124,5 @@ def check_cube_static_arbitrage(
     """Run butterfly and calendar checks and return a structured report."""
 
     prices = cube_prices_from_vols(forwards, annuities, strikes, expiries, vols)
-    violations = [*check_butterfly(prices, tol=tol), *check_calendar(prices, tol=tol)]
+    violations = [*check_butterfly(prices, strikes, tol=tol), *check_calendar(prices, tol=tol)]
     return ArbReport(tuple(violations))

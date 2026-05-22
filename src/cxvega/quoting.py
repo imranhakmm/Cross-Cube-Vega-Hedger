@@ -37,7 +37,7 @@ def half_spread_vol_bps(
     factor_var = max(float(instrument_loading @ factor_covariance @ instrument_loading), 0.0)
     scaled_inventory = inventory_factor_exposure / 1.0e7
     directional = abs(float(scaled_inventory @ factor_covariance @ instrument_loading))
-    inventory_addon = float(1.0e4 * risk_aversion * (0.15 * np.sqrt(factor_var) + directional))
+    inventory_addon = float(1.0e4 * risk_aversion * (0.075 * np.sqrt(factor_var) + directional))
     return float(base_half_spread_vol_bps + inventory_addon)
 
 
