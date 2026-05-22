@@ -44,6 +44,7 @@ def apply_style() -> None:
             "savefig.dpi": 180,
             "savefig.bbox": "tight",
             "savefig.facecolor": "white",
+            "svg.hashsalt": "cross-cube-vega",
         }
     )
 
@@ -57,4 +58,3 @@ def strategy_colours() -> dict[str, str]:
         "Bucketed vega-flat": PALETTE.pine,
         "Factor-neutral": PALETTE.oxblood,
     }
-

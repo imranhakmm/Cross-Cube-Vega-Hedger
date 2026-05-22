@@ -173,7 +173,7 @@ def architecture_figure() -> Path:
                 xytext=(x_pos + 0.085, 0.52),
                 arrowprops={"arrowstyle": "->", "color": PALETTE.oxblood, "lw": 1.4},
             )
-    fig_svg.savefig("docs/architecture.svg")
+    fig_svg.savefig("docs/architecture.svg", metadata={"Date": None})
     plt.close(fig_svg)
     return out
 
@@ -267,7 +267,7 @@ def pca_figure(path: CubePath) -> Path:
     pd.DataFrame(
         {
             "factor": ["level", "slope", "curvature"],
-            "loading_correlation": recovery.loading_correlations,
+            "loading_similarity": recovery.loading_similarity,
             "explained_variance": recovery.explained_variance[:3],
         }
     ).to_csv("outputs/tables/pca_recovery.csv", index=False)

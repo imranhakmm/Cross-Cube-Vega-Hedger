@@ -4,7 +4,7 @@ import argparse
 import shutil
 import subprocess
 import textwrap
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import matplotlib.image as mpimg
@@ -173,7 +173,14 @@ def _fallback_pdf(settings: Settings) -> None:
     summary = pd.read_csv("outputs/tables/results_summary.csv")
     arb = pd.read_csv("outputs/tables/arb_violation_counts.csv")
     output = REPORT_DIR / "report.pdf"
-    with PdfPages(output) as pdf:
+    pdf_metadata = {
+        "Title": "Cross-Cube Vega Hedging: A Swaption Market-Making Lab",
+        "Author": "Imran Hakim",
+        "Creator": "cxvega build_pdf_report.py",
+        "CreationDate": datetime(2026, 5, 22, tzinfo=UTC),
+        "ModDate": datetime(2026, 5, 22, tzinfo=UTC),
+    }
+    with PdfPages(output, metadata=pdf_metadata) as pdf:
         fig, ax = plt.subplots(figsize=(8.5, 11))
         ax.set_facecolor(PALETTE.charcoal)
         fig.patch.set_facecolor(PALETTE.charcoal)
@@ -256,7 +263,7 @@ def _fallback_pdf(settings: Settings) -> None:
             (
                 "Factor Recovery",
                 [
-                    "PCA is run on simulated ATM log-vol changes. The first three components are aligned by correlation with the true loadings. This verifies that the analytics can see the factors the simulator injects.",
+                    "PCA is run on simulated ATM log-vol changes. The first three components are aligned by cosine similarity with the true loadings. This avoids penalising the nearly parallel level mode for having a large constant component.",
                 ],
             ),
             (

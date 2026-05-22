@@ -168,7 +168,12 @@ def main() -> None:
         title="Terminal P&L by strategy",
     )
     hist.update_layout(font_family="Arial", paper_bgcolor="#f5f5f5", plot_bgcolor="white")
-    hist_html = pio.to_html(hist, include_plotlyjs="cdn", full_html=False)
+    hist_html = pio.to_html(
+        hist,
+        include_plotlyjs="cdn",
+        full_html=False,
+        div_id="cxvega-terminal-pnl-histogram",
+    )
 
     line = px.line(
         result.representative_path,
@@ -179,7 +184,12 @@ def main() -> None:
         title="Representative cumulative P&L path",
     )
     line.update_layout(font_family="Arial", paper_bgcolor="#f5f5f5", plot_bgcolor="white")
-    line_html = pio.to_html(line, include_plotlyjs=False, full_html=False)
+    line_html = pio.to_html(
+        line,
+        include_plotlyjs=False,
+        full_html=False,
+        div_id="cxvega-representative-path",
+    )
 
     summary_html = _money_table(result.summary)
     _write_page(

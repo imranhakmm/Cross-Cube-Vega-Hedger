@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import permutations
 from typing import cast
 
 import numpy as np
@@ -19,8 +20,17 @@ class PCARecovery:
     explained_variance: NDArray[np.float64]
     recovered_loadings: NDArray[np.float64]
     true_loadings: NDArray[np.float64]
-    loading_correlations: NDArray[np.float64]
+    loading_similarity: NDArray[np.float64]
     scores: NDArray[np.float64]
+
+
+def _cosine_similarity(lhs: NDArray[np.float64], rhs: NDArray[np.float64]) -> float:
+    """Return cosine similarity between two loading vectors."""
+
+    denominator = float(np.linalg.norm(lhs) * np.linalg.norm(rhs))
+    if denominator == 0.0:
+        return 0.0
+    return float(lhs @ rhs / denominator)
 
 
 def recover_pca_factors(path: CubePath, n_components: int = 3) -> PCARecovery:
@@ -34,25 +44,32 @@ def recover_pca_factors(path: CubePath, n_components: int = 3) -> PCARecovery:
     components = cast(NDArray[np.float64], pca.components_).T
     true = path.loadings.reshape(-1, 3)
     aligned = np.empty_like(components)
-    corrs = np.empty(n_components, dtype=float)
-    used: set[int] = set()
-    for k in range(n_components):
-        candidates = []
-        for j in range(true.shape[1]):
-            if j in used:
-                continue
-            corr = np.corrcoef(components[:, k], true[:, j])[0, 1]
-            candidates.append((abs(corr), corr, j))
-        _abs_corr, corr, best = max(candidates, key=lambda item: item[0])
-        used.add(best)
-        sign = 1.0 if corr >= 0.0 else -1.0
-        aligned[:, best] = sign * components[:, k]
-        corrs[best] = abs(corr)
+    similarity_matrix = np.empty((n_components, n_components), dtype=float)
+    for component_index in range(n_components):
+        for factor_index in range(n_components):
+            similarity_matrix[component_index, factor_index] = _cosine_similarity(
+                components[:, component_index],
+                true[:, factor_index],
+            )
+
+    best_assignment = max(
+        permutations(range(n_components)),
+        key=lambda assignment: sum(
+            abs(similarity_matrix[component_index, factor_index])
+            for component_index, factor_index in enumerate(assignment)
+        ),
+    )
+    similarities = np.empty(n_components, dtype=float)
+    for component_index, factor_index in enumerate(best_assignment):
+        similarity = similarity_matrix[component_index, factor_index]
+        sign = 1.0 if similarity >= 0.0 else -1.0
+        aligned[:, factor_index] = sign * components[:, component_index]
+        similarities[factor_index] = abs(similarity)
     return PCARecovery(
         explained_variance=cast(NDArray[np.float64], pca.explained_variance_ratio_),
         recovered_loadings=aligned.reshape(path.n_expiries, path.n_tenors, n_components),
         true_loadings=path.loadings,
-        loading_correlations=corrs,
+        loading_similarity=similarities,
         scores=scores,
     )
 
@@ -66,4 +83,3 @@ def factor_exposure_from_vega(
 
     first_three = np.einsum("ej,ejk->k", vega_grid, loadings)
     return cast(NDArray[np.float64], np.append(first_three, skew_exposure))
-
