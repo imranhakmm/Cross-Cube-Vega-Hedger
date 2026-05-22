@@ -37,6 +37,7 @@ all: clean install lint test simulate figures site report
 
 clean:
 	rm -rf outputs/figures outputs/tables outputs/simulations
-	rm -rf docs/site/*.html docs/site/assets
+	rm -rf docs/site/*.html docs/site/assets docs/site/static
+	rm -f docs/report/figures/eq_*.svg docs/report/report.rendered.html
 	rm -f docs/report/report.pdf docs/report/*.aux docs/report/*.bbl docs/report/*.bcf docs/report/*.blg docs/report/*.fdb_latexmk docs/report/*.fls docs/report/*.log docs/report/*.out docs/report/*.run.xml docs/report/*.toc docs/report/*.xdv
 	mkdir -p outputs/figures outputs/tables outputs/simulations docs/report/figures docs/site

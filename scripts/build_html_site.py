@@ -39,7 +39,7 @@ main {
   padding: 3rem 2rem 5rem 0;
 }
 nav, footer {
-  font-family: "Source Sans Pro", Inter, Arial, sans-serif;
+  font-family: "Source Sans 3", Inter, Arial, sans-serif;
   color: var(--graphite);
   padding: 1rem 8%;
 }
@@ -54,7 +54,7 @@ nav a, footer a {
   text-decoration: none;
 }
 h1, h2 {
-  font-family: "Source Sans Pro", Inter, Arial, sans-serif;
+  font-family: "Source Sans 3", Inter, Arial, sans-serif;
   font-weight: 600;
   letter-spacing: 0;
   color: var(--oxblood);
@@ -90,7 +90,7 @@ p {
 table {
   border-collapse: collapse;
   max-width: 64rem;
-  font-family: "Source Sans Pro", Inter, Arial, sans-serif;
+  font-family: "Source Sans 3", Inter, Arial, sans-serif;
   font-size: 14px;
 }
 th, td {
@@ -139,9 +139,10 @@ PAGE_TEMPLATE = Template(
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title }}</title>
   <link rel="stylesheet" href="assets/tufte.css">
+  <link rel="stylesheet" href="assets/report.css">
   <style>{{ style }}</style>
 </head>
-<body>
+<body class="site-page">
 <nav>
   <a href="index.html">Executive summary</a>
   <a href="model.html">Model</a>
@@ -182,6 +183,11 @@ def _write_site_css() -> None:
     assets = Path("docs/site/assets")
     assets.mkdir(parents=True, exist_ok=True)
     (assets / "tufte.css").write_text(TUFTE_CSS.strip() + "\n", encoding="utf-8")
+    shutil.copyfile("docs/report/style/report.css", assets / "report.css")
+    shutil.copytree("docs/report/style/fonts", assets / "fonts", dirs_exist_ok=True)
+    static = Path("docs/site/static")
+    static.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile("docs/report/templates/_architecture.svg", static / "architecture.svg")
 
 
 def main() -> None:
@@ -208,7 +214,7 @@ def main() -> None:
         title="Terminal P&L by strategy",
     )
     hist.update_layout(
-        font_family="Source Sans Pro, Inter, Arial, sans-serif",
+        font_family="Source Sans 3, Inter, Arial, sans-serif",
         paper_bgcolor=PALETTE.off_white,
         plot_bgcolor="white",
     )
@@ -229,7 +235,7 @@ def main() -> None:
         title="Representative cumulative P&L path",
     )
     line.update_layout(
-        font_family="Source Sans Pro, Inter, Arial, sans-serif",
+        font_family="Source Sans 3, Inter, Arial, sans-serif",
         paper_bgcolor=PALETTE.off_white,
         plot_bgcolor="white",
     )
@@ -263,6 +269,7 @@ def main() -> None:
         <p>The simulator evolves ATM log-volatility through smooth level, slope, and curvature
         loadings over the expiry-tenor grid. SABR rho is bounded in [-0.95, 0.0], log-nu mean
         reverts, and both are correlated with the level shock.</p>
+        <img src="static/architecture.svg" alt="Architecture diagram">
         <img src="assets/atm_cube_snapshots.png" alt="ATM cube snapshots">
         <h2>Calibration Diagnostics</h2>
         <img src="assets/calibration_residual_heatmaps.png" alt="Calibration residuals">

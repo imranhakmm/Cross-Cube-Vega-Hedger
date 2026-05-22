@@ -1,5 +1,7 @@
 # Report Style Notes
 
-The preferred LaTeX build uses XeLaTeX with EB Garamond for body text, Source Sans Pro for headings, and JetBrains Mono for code.
+The report is rendered from `docs/report/templates/report.html.j2` and `docs/report/style/report.css`.
 
-The current sandbox does not provide `xelatex` or `dvisvgm`, so `scripts/build_pdf_report.py` writes the LaTeX sources and then renders the delivered PDF through a deterministic Matplotlib fallback. The fallback uses DejaVu Serif and DejaVu Sans, which are bundled with Matplotlib, while preserving the project palette, charcoal cover page, header/footer treatment, and wireframe cube mark.
+The preferred renderer is WeasyPrint. In this sandbox, WeasyPrint installs but cannot load the native Pango/GObject stack, so the build falls back to Playwright/headless Chrome. The Matplotlib renderer remains available only through `scripts/build_pdf_report.py --fallback-matplotlib`.
+
+Local fonts are bundled under `docs/report/style/fonts/`: EB Garamond for body text, Source Sans 3 for headings and tables, and JetBrains Mono for monospace/equation-adjacent styling. The same stylesheet and font files are copied into `docs/site/assets/` during the static-site build so the PDF and HTML site share typography and palette.

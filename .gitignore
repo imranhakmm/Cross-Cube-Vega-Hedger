@@ -22,3 +22,4 @@ docs/report/*.out
 docs/report/*.run.xml
 docs/report/*.toc
 docs/report/*.xdv
+docs/report/report.rendered.html

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import shutil
 import subprocess
 import textwrap
@@ -12,6 +14,7 @@ from pathlib import Path
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import pandas as pd
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from matplotlib.backends.backend_pdf import PdfPages
 
 from cxvega.config import Settings, load_settings
@@ -29,6 +32,8 @@ OUTPUT_FIGURE_DIR = Path("outputs/figures")
 TABLE_DIR = Path("outputs/tables")
 REPORT_DATE = date(2026, 5, 22)
 TITLE = "Cross-Cube Vega Hedging: A Swaption Market-Making Lab"
+TEMPLATE_DIR = REPORT_DIR / "templates"
+RENDERED_HTML = REPORT_DIR / "report.rendered.html"
 
 
 @dataclass(frozen=True)
@@ -224,6 +229,665 @@ def _try_xelatex() -> bool:
         return False
 
 
+def _fmt_mm(value: float) -> str:
+    return f"{value / 1.0e6:,.1f}"
+
+
+def _html_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
+    header_html = "".join(f"<th>{header}</th>" for header in headers)
+    row_html = []
+    for row in rows:
+        cells = "".join(f"<td>{cell}</td>" for cell in row)
+        row_html.append(f"<tr>{cells}</tr>")
+    return f"<table><thead><tr>{header_html}</tr></thead><tbody>{''.join(row_html)}</tbody></table>"
+
+
+def _summary_table(summary: pd.DataFrame, strategies: Sequence[str]) -> str:
+    frame = summary.set_index("strategy").loc[list(strategies)]
+    rows = [
+        [
+            str(strategy),
+            _fmt_mm(float(row["mean"])),
+            _fmt_mm(float(row["std"])),
+            _fmt_mm(float(row["var_5"])),
+            f"{float(row['sharpe']):.2f}",
+        ]
+        for strategy, row in frame.iterrows()
+    ]
+    return _html_table(["Strategy", "Mean", "Std", "5% VaR", "Sharpe"], rows)
+
+
+def _arb_table(arb: pd.DataFrame) -> str:
+    frame = arb.copy()
+    for column in ["butterfly", "calendar"]:
+        if column not in frame:
+            frame[column] = 0
+    rows = [
+        [
+            str(row["fit"]),
+            str(int(row["violations"])),
+            str(int(row["butterfly"])),
+            str(int(row["calendar"])),
+        ]
+        for _, row in frame.iterrows()
+    ]
+    return _html_table(["Fit", "Total", "Butterfly", "Calendar"], rows)
+
+
+def _pca_table(pca: pd.DataFrame) -> str:
+    rows = [
+        [
+            str(row["factor"]).title(),
+            f"{float(row['loading_similarity']):.3f}",
+            f"{100.0 * float(row['explained_variance']):.1f}%",
+        ]
+        for _, row in pca.iterrows()
+    ]
+    return _html_table(["Factor", "Cosine", "Expl. var"], rows)
+
+
+def _tail_table(summary: pd.DataFrame) -> str:
+    rows = [
+        [
+            str(row["strategy"]),
+            _fmt_mm(float(row["var_1"])),
+            _fmt_mm(float(row["var_5"])),
+            _fmt_mm(float(row["cvar_5"])),
+            _fmt_mm(float(row["std"])),
+        ]
+        for _, row in summary.iterrows()
+    ]
+    return _html_table(["Strategy", "1% VaR", "5% VaR", "5% CVaR", "Std"], rows)
+
+
+def _figure(filename: str, caption: str, css_class: str = "") -> str:
+    class_attr = f' class="{css_class}"' if css_class else ""
+    return (
+        f"<figure{class_attr}>"
+        f'<img src="figures/{filename}" alt="{caption}">'
+        f"<figcaption>{caption}</figcaption>"
+        "</figure>"
+    )
+
+
+def _equation(name: str) -> str:
+    return f'<img class="equation" src="figures/eq_{name}.svg" alt="{name} equation">'
+
+
+def _render_equations() -> None:
+    equations = {
+        "atm": r"\log \sigma_{\mathrm{ATM}}(T,\tau,t)=\mu(T,\tau)+\sum_i L_i(T,\tau)X_i(t)",
+        "ou": r"dX_i=-\kappa_i X_i\,dt+\eta_i\,dW_i,\quad \mathrm{corr}(dW)=R",
+        "calibration": r"J=\Vert\sigma_m-\sigma_q\Vert^2+\lambda_b B+\lambda_c C+\lambda_s S",
+        "hedge": r"\min_h \Vert A(q+Bh)\Vert^2+\lambda\Vert h\Vert^2+c^\top |h|",
+        "quoting": r"r_i=\mathrm{mid}_i-\gamma q^\top\Sigma l_i(T_{\max}-t)",
+    }
+    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
+    with plt.rc_context({"mathtext.fontset": "stix", "svg.fonttype": "path"}):
+        for name, expression in equations.items():
+            fig = plt.figure(figsize=(7.0, 0.56))
+            fig.patch.set_alpha(0.0)
+            fig.text(0.5, 0.5, f"${expression}$", ha="center", va="center", fontsize=17)
+            fig.savefig(
+                FIGURE_DIR / f"eq_{name}.svg",
+                bbox_inches="tight",
+                pad_inches=0.02,
+                transparent=True,
+                metadata={"Date": None},
+            )
+            plt.close(fig)
+
+
+def _build_pages(summary: pd.DataFrame, arb: pd.DataFrame, pca: pd.DataFrame) -> list[dict[str, str | bool]]:
+    return [
+        {
+            "title": "Abstract and Executive Summary",
+            "architecture": False,
+            "body": f"""
+              <h2>Abstract</h2>
+              <p>A swaption market-maker sees vega by cube point, but the realised cube does not move
+              one point at a time. It moves through correlated factors: ATM level, expiry slope,
+              curvature, and skew-wing dynamics. This lab simulates that cube, calibrates noisy SABR
+              smiles, runs a client-flow market-maker, and compares four hedging policies. The
+              factor-neutral rule compresses terminal P&amp;L dispersion and improves the left tail.
+              The limitation is explicit: no live market data, fixed beta, daily hedging, and a
+              quoting overlay that is a factor-space heuristic rather than a full HJB solution.</p>
+              <h2>Executive Summary</h2>
+              <p class="lede">Single-tenor vega is a mirage. It is a convenient control number,
+              but it is not the basis in which the cube actually moves.</p>
+              <p>The same-axis terminal P&amp;L overlay below is the central exhibit: delta-only hedging
+              leaves a fat distribution, while factor-neutral hedging concentrates the outcome around
+              a tighter risk budget. The result is not free. It trades more, pays more hedge cost,
+              and depends on liquid proxy instruments. Those costs buy a cleaner residual.</p>
+              {_summary_table(summary, ["Delta-only", "Factor-neutral"])}
+              {_figure("headline_pnl_dist.png", "Figure 1. Same-axis terminal P&L overlay; dashed lines mark strategy means.", "figure-small")}
+            """,
+        },
+        {
+            "title": "Introduction and Motivation",
+            "architecture": False,
+            "body": """
+              <div class="columns">
+                <div>
+                  <h2>Why Node Vega Exists</h2>
+                  <p>Node vega is the reporting standard because it is operationally legible. Traders
+                  quote points, risk systems aggregate points, and end-of-day controls ask whether a
+                  trader is long or short a recognisable part of the cube. For a desk, that convention
+                  is useful. For a hedge, it is incomplete.</p>
+                  <h2>The Risk Basis</h2>
+                  <p>A block in 2y into 10y exposes the book to more than the 2y x 10y mark. It has
+                  projection onto level, onto the front-back expiry slope, onto an intermediate-expiry
+                  hump, and onto skew and wing dynamics. A local vega hedge can be flat at the booked
+                  point and still be long the level factor.</p>
+                </div>
+                <div>
+                  <h2>The Bartlett Pattern</h2>
+                  <p>Bartlett's SABR delta correction is a useful mental model. The Black delta is the
+                  obvious hedge only if volatility parameters stand still. Once alpha co-moves with the
+                  forward, the hedge needs the parameter response too. Cross-cube vega has the same
+                  shape: the obvious node hedge ignores nearby smiles moving together.</p>
+                  <h2>Trader's-Day Framing</h2>
+                  <p>The market-maker takes down flow, earns edge, and goes home with inventory. The
+                  next morning the cube has moved. The question is not whether the single node was
+                  hedged, but whether the hedge was short the same factor the book was long.</p>
+                </div>
+              </div>
+            """,
+        },
+        {
+            "title": "Architecture",
+            "architecture": True,
+            "body": """
+              <h2>Pipeline Walk-Through</h2>
+              <p>The simulator produces a full SABR cube path: forwards, annuities, strikes, ATM vols,
+              rho, nu, alpha, and quoted smile vols. Calibration consumes a noisy snapshot and writes
+              residual heatmaps plus static-arbitrage counts. PCA analytics recover the latent risk
+              basis. The market-maker loop samples client flow, applies the quoting overlay, hedges at
+              end-of-day, and emits path-level P&amp;L. Attribution then reconciles edge, theta, delta,
+              first-order vega, cross-vega, and hedge cost.</p>
+              <h2>Reproducibility Contract</h2>
+              <p>The master seed sits in YAML. The observation-noise stream is separate from the
+              simulator streams, so calibrating a noisy market snapshot does not perturb the true cube
+              path. The Makefile rebuilds simulations, figures, the static site, and this PDF.</p>
+            """,
+        },
+        {
+            "title": "Model: True Cube I",
+            "architecture": False,
+            "body": f"""
+              <div class="columns">
+                <div>
+                  <h2>ATM Factor Surface</h2>
+                  <p>The cube is indexed by option expiry T in 1m, 3m, 6m, 1y, 2y, 5y, and 10y, and
+                  underlying swap tenor tau in 1y, 2y, 5y, and 10y. The ATM Black-vol surface is driven
+                  by three smooth loadings over this grid.</p>
+                  {_equation("atm")}
+                  <h2>Loading Shapes</h2>
+                  <p>The level loading is nearly constant across the cube with a small tenor tilt. The
+                  slope loading is the centred log-expiry coordinate. The curvature loading is a Gaussian
+                  hump around intermediate expiries, centred near two years, then normalised.</p>
+                </div>
+                <div>
+                  <h2>OU Dynamics</h2>
+                  {_equation("ou")}
+                  <p>The OU factors mean-revert daily. Their instantaneous covariance is configurable
+                  in YAML, and the quoting overlay uses the full covariance matrix including off-diagonal
+                  terms. That matters because level inventory and skew inventory should interact.</p>
+                  <h2>Stylised Scale</h2>
+                  <p>The front of the normal-vol cube is set around the 60-90bp region and the back is
+                  anchored near 80bp, consistent with broad interest-rate volatility modelling examples.
+                  Absolute levels are laboratory choices, not market claims.</p>
+                </div>
+              </div>
+            """,
+        },
+        {
+            "title": "Model: True Cube II",
+            "architecture": False,
+            "body": """
+              <div class="columns">
+                <div>
+                  <h2>Skew and Wing Dynamics</h2>
+                  <p>Each expiry-tenor slice carries SABR parameters alpha, beta, rho, and nu. Beta is
+                  fixed at the configured value. Rho is generated through a transformed OU process, so
+                  it stays inside [-0.95, 0.0]. Log-nu is another OU process. Both shocks are correlated
+                  with the level factor, reflecting the stylised observation that skew and volatility
+                  level do not move independently.</p>
+                  <h2>ATM Inversion</h2>
+                  <p>The simulator specifies ATM vol first, then recovers alpha from Hagan's ATM SABR
+                  formula. This keeps the factor model attached to the observable surface rather than
+                  to an abstract alpha process.</p>
+                </div>
+                <div>
+                  <h2>SABR and Vol Conversion</h2>
+                  <p>The pricer implements Hagan's 2002 lognormal SABR formula with a shifted extension
+                  for negative-rate laboratory cases. Black-76 and Bachelier pricing are both present.
+                  Normal/lognormal conversion is done by Brent root-finding on price equality rather
+                  than by a closed-form approximation.</p>
+                  <h2>Parameter Honesty</h2>
+                  <p>The configuration file is not a calibration file. It records a plausible set of
+                  stylised facts: mean-reverting factors, correlated level/skew shocks, bounded rho,
+                  and liquid hedge points. The report is a controlled experiment, not a claim about
+                  today's swaption market.</p>
+                </div>
+              </div>
+            """,
+        },
+        {
+            "title": "Model: Cube Snapshots",
+            "architecture": False,
+            "body": f"""
+              {_figure("atm_cube_snapshots.png", "Figure 2. Three ATM cube snapshots from the simulated path.")}
+              <h2>Reading the Heatmaps</h2>
+              <p>The snapshots are deliberately boring in the right way: the whole cube changes, and
+              nearby expiries and tenors change together. A single isolated node shock would make the
+              hedging problem artificial. The thesis needs a cube that moves in common modes, because
+              that is where local vega reports become a lossy compression.</p>
+            """,
+        },
+        {
+            "title": "Calibration I",
+            "architecture": False,
+            "body": f"""
+              <div class="columns">
+                <div>
+                  <h2>Noisy Market Snapshot</h2>
+                  <p>The calibration target is no longer the exact data-generating SABR surface. Each
+                  strike vol receives independent multiplicative lognormal observation noise:
+                  sigma_market = sigma_true exp(eps), eps ~ N(0, sigma_obs^2), with sigma_obs = 0.005
+                  by default. The random stream is separate from the simulator stream.</p>
+                  <h2>Per-Slice Fit</h2>
+                  <p>Per-slice calibration fixes beta, matches ATM exactly through alpha inversion, and
+                  fits rho and nu by least squares. It gives low local residuals, but it has no reason
+                  to respect calendar consistency across neighbouring expiries.</p>
+                </div>
+                <div>
+                  <h2>Cube-Constrained Fit</h2>
+                  <p>The joint objective keeps the same ATM discipline and adds penalties for butterfly
+                  and calendar violations, plus a smaller smoothness penalty on rho and log-nu over the
+                  cube. The no-arbitrage penalties dominate smoothness by design.</p>
+                  {_equation("calibration")}
+                  <p>This is not a local least-squares beauty contest; it is a risk-control fit. The
+                  diagnostic question is whether a small residual cost buys fewer static-arbitrage
+                  breaks.</p>
+                </div>
+              </div>
+            """,
+        },
+        {
+            "title": "Calibration II",
+            "architecture": False,
+            "body": f"""
+              {_figure("calibration_residual_heatmaps.png", "Figure 3. Residual RMS in vol bp. Joint calibration pays local residual for consistency.", "figure-small")}
+              <h2>Static-Arbitrage Counts</h2>
+              {_arb_table(arb)}
+              <p>The noisy per-slice fit now has genuine residuals instead of a meaningless 1e-12
+              colourbar. The constrained fit is slightly worse locally, but it removes the material
+              calendar breaks under the same checker. This is the calibration analogue of the hedging
+              thesis: a local optimum can be the wrong portfolio object.</p>
+            """,
+        },
+        {
+            "title": "Factor Recovery via PCA I",
+            "architecture": False,
+            "body": f"""
+              <div class="columns">
+                <div>
+                  <h2>Method</h2>
+                  <p>PCA is run on daily changes in the simulated ATM log-vol surface. The first three
+                  components explain the designed level, slope, and curvature subspace. Because PCA
+                  basis vectors are sign-ambiguous, the diagnostic aligns them to the known simulator
+                  loadings and flips signs consistently.</p>
+                  <h2>Cosine Similarity</h2>
+                  {_pca_table(pca)}
+                </div>
+                <div>
+                  <h2>What This Validates</h2>
+                  <p>The table does not claim that PCA can name economic factors in real data without
+                  judgement. It says something narrower and important: in this controlled cube, the
+                  analytics recover the latent risk subspace used by the hedger.</p>
+                  <h2>What It Does Not Validate</h2>
+                  <p>It does not validate the parameter levels, the absence of jumps, or the stability
+                  of factor loadings through regimes. A live implementation would rerun this diagnostic
+                  over rolling windows.</p>
+                </div>
+              </div>
+            """,
+        },
+        {
+            "title": "Factor Recovery via PCA II",
+            "architecture": False,
+            "body": f"""
+              {_figure("pca_recovery.png", "Figure 4. Dashed true loadings and solid recovered loadings are normalised consistently.")}
+              <h2>Reading the Figure</h2>
+              <p>The recovered curves are plotted against the same expiry axis and colour as the true
+              factor labels. Both are unit-normalised before plotting, and the sign ambiguity is
+              resolved before the cosine table is written.</p>
+            """,
+        },
+        {
+            "title": "Hedging Strategies I",
+            "architecture": False,
+            "body": """
+              <div class="columns">
+                <div>
+                  <h2>Delta-Only</h2>
+                  <p>The control hedge removes underlying swap delta and leaves vega to run. It is
+                  useful as a lower bound because it captures the cost of pretending the cube is not the
+                  main risk. Delta P&amp;L should be small in expectation, but vega and cross-vega dominate.</p>
+                  <h2>Single-Tenor Vega-Flat</h2>
+                  <p>Each new trade's vega is snapped to the nearest cube node and offset by trading
+                  that node. This looks clean in a blotter and can be deeply wrong in factor space if
+                  the offset node loads on the wrong combination of level, slope, and curvature.</p>
+                </div>
+                <div>
+                  <h2>Bucketed Vega-Flat</h2>
+                  <p>Bucketed hedging nets vega within expiry buckets: &lt;=1y, 1y-3y, 3y-7y, and &gt;7y.
+                  This practical compromise cannot fully neutralise factor exposure, but it stops the
+                  most obvious front/back leakage and uses fewer hedge instruments.</p>
+                  <h2>Portfolio Greek Matrix</h2>
+                  <p>Let V be node vega and L be the loading matrix. Raw vega reports V. Factor risk is
+                  closer to L'V, augmented by skew exposure. The hedging question is not only whether
+                  sum(V)=0, but whether the projected vector is small.</p>
+                </div>
+              </div>
+            """,
+        },
+        {
+            "title": "Hedging Strategies II",
+            "architecture": False,
+            "body": f"""
+              <div class="columns">
+                <div>
+                  <h2>Factor-Neutral Hedge</h2>
+                  <p>The factor-neutral rule selects liquid cube points and solves a small constrained
+                  hedge to bring level, slope, curvature, and skew exposures near zero. It minimises
+                  residual factor exposure subject to trading-cost and instrument-size penalties.</p>
+                  {_equation("hedge")}
+                  <p>In trader language: use the liquid points that actually load on the factors you
+                  are trying to offset, and avoid over-trading an ill-conditioned local hedge.</p>
+                </div>
+                <div>
+                  <h2>Instrument Selection</h2>
+                  <p>The hedge set is smaller than the risk grid. That is intentional. A market-maker
+                  normally has a handful of executable liquid points and must project the book onto
+                  that basis. The factor-neutral hedge is a practical proxy hedge, not a fantasy where
+                  every node trades frictionlessly.</p>
+                  <h2>Cost Accounting</h2>
+                  <p>Every hedge trade pays a configurable bid-ask cost in vol bp. The attribution table
+                  keeps that cost separate from cross-vega residuals.</p>
+                </div>
+              </div>
+            """,
+        },
+        {
+            "title": "Market-Maker Simulation",
+            "architecture": False,
+            "body": """
+              <div class="columns">
+                <div>
+                  <h2>Client Flow</h2>
+                  <p>Client trades arrive from a Poisson process. Cube point, strike offset, side, and
+                  notional are sampled from simple distributions. The client crosses the quote with
+                  probability near one. That simplification keeps the experiment focused on inventory
+                  and hedging rather than on a separate client-response model.</p>
+                  <h2>Book State</h2>
+                  <p>After each trade, inventory Greeks and factor exposures update. Hedging fires at
+                  end-of-day. The simulation records the book before and after hedging so P&amp;L can be
+                  attributed to edge, theta, delta, first-order vega, cross-vega, and hedge cost.</p>
+                </div>
+                <div>
+                  <h2>Monte Carlo Scale</h2>
+                  <p>The default run uses 1,000 market-making paths over 252 trading days. Tests use
+                  small deterministic seeds and avoid Monte Carlo. Generated simulations are cached
+                  under outputs/simulations, while make clean removes them to prove reproducibility.</p>
+                  <h2>Simplifications</h2>
+                  <p>There is no adverse-selection model, no funding spread, no exchange margin, and
+                  no jump risk. Those choices make the experiment narrower, but they also make the
+                  hedge comparison easier to audit.</p>
+                </div>
+              </div>
+            """,
+        },
+        {
+            "title": "Quoting Overlay",
+            "architecture": False,
+            "body": f"""
+              <h2>Reservation Vol in Factor Space</h2>
+              <p>The quote mid is adjusted by an Avellaneda-Stoikov-style inventory charge, but the
+              inventory vector is factor exposure rather than a single scalar position.</p>
+              {_equation("quoting")}
+              <div class="columns">
+                <div>{_figure("quoting_half_spread_heatmap.png", "Figure 5. Half-spread responds to level and skew inventory together.", "figure-tiny")}</div>
+                <div>
+                  <p>The heatmap is intentionally no longer flat. The displayed grid spans a wide enough
+                  inventory range for the risk-aversion term to matter, and the covariance matrix is
+                  used with off-diagonal terms intact. The gradient is therefore not purely axis-aligned.
+                  This remains a heuristic overlay, not a full dynamic-programming derivation.</p>
+                </div>
+              </div>
+            """,
+        },
+        {
+            "title": "Results I: Representative Path",
+            "architecture": False,
+            "body": f"""
+              {_figure("representative_mm_path.png", "Figure 6. One path shows how the same client flow diverges under different hedges.")}
+              <h2>Path-Level Read</h2>
+              <p>A single path should not be over-interpreted, but it is useful for sanity. The
+              strategies see the same simulated flow and cube path. Divergence comes from the hedge
+              state, hedge costs, and residual factor exposures rather than from different market draws.</p>
+            """,
+        },
+        {
+            "title": "Results II: Distributions and Tail Risk",
+            "architecture": False,
+            "body": f"""
+              {_figure("pnl_dist_small_multiples.png", "Figure 7. Small multiples keep the same x-axis while showing each strategy separately.", "figure-small")}
+              <h2>Tail-Risk Table ($mm)</h2>
+              {_tail_table(summary)}
+              <p>The same-axis overlay in the executive summary is the headline picture. These small
+              multiples make the same point strategy by strategy: delta-only carries the broadest
+              distribution, bucketed hedging improves the shape, and factor-neutral hedging is the
+              tightest in this experiment.</p>
+            """,
+        },
+        {
+            "title": "Results III: P&L Attribution",
+            "architecture": False,
+            "body": f"""
+              {_figure("pnl_attribution.png", "Figure 8. Attribution reconciles spread edge, Greeks, residual cross-vega, and cost.")}
+              <h2>Trader-Tone Read</h2>
+              <p>The factor-neutral hedge does not create edge; it protects the edge already earned.
+              Its cost is visible and should be challenged. The reason to like it is that the
+              cross-vega residual is less dominant, so the P&amp;L is less dependent on being lucky about
+              which cube factor moved after the trade.</p>
+            """,
+        },
+        {
+            "title": "Results IV: What the Experiment Says",
+            "architecture": False,
+            "body": """
+              <div class="columns">
+                <div>
+                  <h2>Headline</h2>
+                  <p>The result supports the core thesis in the controlled setting: a hedge constructed
+                  in the cube's factor basis produces a tighter realised P&amp;L distribution than a hedge
+                  constructed only in local node vega. The improvement is clearest in the left tail and
+                  in the residual attribution.</p>
+                  <h2>Calibration Link</h2>
+                  <p>The calibration section tells the same story in model space. Per-slice fitting wins
+                  the local residual contest. The cube-constrained fit is the better surface object
+                  because it removes static-arbitrage breaks under a symmetric checker.</p>
+                </div>
+                <div>
+                  <h2>Caveat</h2>
+                  <p>This is not a live trading backtest. It is a market-making lab. The aim is to make
+                  the mechanics transparent enough that a reviewer can disagree with the parameters,
+                  rerun the project, and see how the result changes.</p>
+                  <h2>Desk Use</h2>
+                  <p>The immediate desk lesson is not to throw away node vega. Keep it for operations,
+                  but report the factor projection beside it. A position that is node-flat and
+                  factor-long should not be called flat.</p>
+                </div>
+              </div>
+            """,
+        },
+        {
+            "title": "Assumptions and Limitations",
+            "architecture": False,
+            "body": """
+              <p><strong>Simulated data only.</strong> No conclusion depends on a hidden vendor feed,
+              but absolute P&amp;L levels are not live-market forecasts.</p>
+              <p><strong>Single-curve discounting.</strong> The lab ignores multi-curve basis and
+              collateral details that would matter in production pricing.</p>
+              <p><strong>Fixed beta.</strong> SABR beta is configurable but not calibrated; this keeps
+              the exercise focused on cross-cube vega.</p>
+              <p><strong>No jumps.</strong> Daily OU dynamics miss event risk, central-bank gap moves,
+              and regime shifts.</p>
+              <p><strong>Daily hedging.</strong> Intraday inventory management is compressed into an
+              end-of-day hedge.</p>
+              <p><strong>Perfectly observed mids.</strong> There is no mark uncertainty or broker-quality
+              hierarchy.</p>
+              <p><strong>Heuristic quoting.</strong> The factor-space reservation vol borrows the
+              Avellaneda-Stoikov shape but is not a full HJB solution.</p>
+            """,
+        },
+        {
+            "title": "Extensions",
+            "architecture": False,
+            "body": """
+              <h2>Real-data overlay</h2><p>Use exchange settles or broker indicative marks to initialise
+              the cube and compare factor stability.</p>
+              <h2>Rough-vol dynamics</h2><p>Replace OU factors with rougher latent drivers and test
+              whether hedging cadence becomes more important.</p>
+              <h2>Multi-curve pricing</h2><p>Add OIS discounting and forward curves so the swaption lab
+              better resembles production infrastructure.</p>
+              <h2>Joint cap-swaption calibration</h2><p>Bring caplets into the smile calibration and ask
+              whether short-rate consistency changes the hedge basis.</p>
+              <h2>Bermudan extension</h2><p>Use least-squares Monte Carlo to push the factor hedge into
+              callable-exotics inventory.</p>
+              <h2>Strategic quoting</h2><p>Let IDB visibility and client response feed back into the
+              reservation-vol rule.</p>
+              <h2>Learning overlay</h2><p>Use reinforcement learning as a policy layer on top of the
+              transparent factor state, not as a black-box replacement.</p>
+            """,
+        },
+        {
+            "title": "References I",
+            "architecture": False,
+            "body": """
+              <div class="references">
+              <p>Andersen, Leif B. G. and Vladimir V. Piterbarg (2010). <em>Interest Rate Modeling</em>.
+              Atlantic Financial Press.</p>
+              <p>Hagan, Patrick S., Deep Kumar, Andrew S. Lesniewski, and Diana E. Woodward (2002).
+              "Managing Smile Risk." <em>Wilmott Magazine</em>.</p>
+              <p>Bartlett, Bruce (2006). "Hedging Under SABR Model." <em>Wilmott Magazine</em>.</p>
+              <p>Rebonato, Riccardo (2002). <em>Modern Pricing of Interest-Rate Derivatives</em>.
+              Princeton University Press.</p>
+              <p>Bergomi, Lorenzo (2016). <em>Stochastic Volatility Modeling</em>. Chapman and Hall/CRC.</p>
+              </div>
+            """,
+        },
+        {
+            "title": "References II",
+            "architecture": False,
+            "body": """
+              <div class="references">
+              <p>Avellaneda, Marco and Sasha Stoikov (2008). "High-frequency trading in a limit order
+              book." <em>Quantitative Finance</em> 8(3), 217-224.</p>
+              <p>Gatheral, Jim (2006). <em>The Volatility Surface: A Practitioner's Guide</em>. Wiley.</p>
+              <p>Brigo, Damiano and Fabio Mercurio (2006). <em>Interest Rate Models: Theory and
+              Practice</em>. Springer.</p>
+              <p>Glasserman, Paul (2004). <em>Monte Carlo Methods in Financial Engineering</em>. Springer.</p>
+              <h2>Build Note</h2>
+              <p>The preferred renderer is WeasyPrint. In this sandbox WeasyPrint's Python package
+              installs, but native Pango/GObject libraries are unavailable, so the active renderer is
+              headless Chromium via Playwright. Matplotlib remains available only behind the explicit
+              emergency flag.</p>
+              </div>
+            """,
+        },
+    ]
+
+
+def _render_report_html(settings: Settings) -> str:
+    apply_style()
+    path = generate_cube(settings, steps=settings.market_maker.days)
+    load_or_run_market_results(settings, path)
+    generate_all_figures(settings, path)
+    _render_equations()
+    summary = pd.read_csv(TABLE_DIR / "results_summary.csv")
+    arb = pd.read_csv(TABLE_DIR / "arb_violation_counts.csv")
+    pca = pd.read_csv(TABLE_DIR / "pca_recovery.csv")
+    environment = Environment(
+        loader=FileSystemLoader(TEMPLATE_DIR),
+        autoescape=select_autoescape(("html", "xml")),
+    )
+    template = environment.get_template("report.html.j2")
+    html = template.render(pages=_build_pages(summary, arb, pca))
+    RENDERED_HTML.write_text(html, encoding="utf-8")
+    return html
+
+
+def _write_pdf_weasyprint(html: str) -> str:
+    stderr_buffer = io.StringIO()
+    stdout_buffer = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(stdout_buffer), contextlib.redirect_stderr(stderr_buffer):
+            from weasyprint import HTML
+
+            HTML(string=html, base_url=str(REPORT_DIR.resolve())).write_pdf(
+                REPORT_DIR / "report.pdf"
+            )
+        return "weasyprint"
+    except Exception as exc:
+        reason = str(exc).splitlines()[0]
+        if "libgobject" in reason or "pango" in reason.lower():
+            reason = "native Pango/GObject libraries unavailable"
+        print(f"WeasyPrint unavailable; falling back to Playwright ({type(exc).__name__}: {reason})")
+        return _write_pdf_playwright()
+
+
+def _find_chrome() -> str | None:
+    candidates = [
+        shutil.which("chromium"),
+        shutil.which("chromium-browser"),
+        shutil.which("google-chrome"),
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            return candidate
+    return None
+
+
+def _write_pdf_playwright() -> str:
+    from playwright.sync_api import sync_playwright
+
+    chrome_path = _find_chrome()
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(
+            headless=True,
+            executable_path=chrome_path,
+        )
+        page = browser.new_page(viewport={"width": 816, "height": 1056})
+        page.emulate_media(media="print")
+        page.goto(RENDERED_HTML.resolve().as_uri(), wait_until="networkidle")
+        page.pdf(
+            path=str(REPORT_DIR / "report.pdf"),
+            format="Letter",
+            print_background=True,
+            prefer_css_page_size=True,
+            margin={"top": "0", "right": "0", "bottom": "0", "left": "0"},
+        )
+        browser.close()
+    return "playwright"
+
+
 def _page(pdf: PdfPages, title: str, page_no: int) -> tuple[plt.Figure, plt.Axes]:
     fig, ax = plt.subplots(figsize=(8.5, 11))
     fig.patch.set_facecolor("white")
@@ -404,7 +1068,7 @@ def _money_mm(value: float) -> str:
     return f"{value / 1.0e6:,.1f}"
 
 
-def _metric_table(summary: pd.DataFrame, strategies: Sequence[str]) -> TableSpec:
+def _mpl_metric_table(summary: pd.DataFrame, strategies: Sequence[str]) -> TableSpec:
     frame = summary.set_index("strategy").loc[list(strategies)]
     rows = [
         [
@@ -423,7 +1087,7 @@ def _metric_table(summary: pd.DataFrame, strategies: Sequence[str]) -> TableSpec
     )
 
 
-def _arb_table(arb: pd.DataFrame) -> TableSpec:
+def _mpl_arb_table(arb: pd.DataFrame) -> TableSpec:
     columns = [column for column in ["fit", "violations", "butterfly", "calendar"] if column in arb]
     rows = [[str(row[column]) for column in columns] for _, row in arb.iterrows()]
     return TableSpec(
@@ -433,7 +1097,7 @@ def _arb_table(arb: pd.DataFrame) -> TableSpec:
     )
 
 
-def _pca_table(pca: pd.DataFrame) -> TableSpec:
+def _mpl_pca_table(pca: pd.DataFrame) -> TableSpec:
     rows = [
         [
             str(row["factor"]).title(),
@@ -449,7 +1113,7 @@ def _pca_table(pca: pd.DataFrame) -> TableSpec:
     )
 
 
-def _tail_table(summary: pd.DataFrame) -> TableSpec:
+def _mpl_tail_table(summary: pd.DataFrame) -> TableSpec:
     frame = summary.set_index("strategy")
     rows = [
         [
@@ -549,7 +1213,7 @@ def _body_pages(pdf: PdfPages, summary: pd.DataFrame, arb: pd.DataFrame, pca: pd
         84,
         size=8.7,
     )
-    _draw_table(ax, _metric_table(summary, ["Delta-only", "Factor-neutral"]), 0.08, y - 0.008)
+    _draw_table(ax, _mpl_metric_table(summary, ["Delta-only", "Factor-neutral"]), 0.08, y - 0.008)
     _draw_image(
         ax,
         OUTPUT_FIGURE_DIR / "headline_pnl_dist.png",
@@ -847,7 +1511,7 @@ def _body_pages(pdf: PdfPages, summary: pd.DataFrame, arb: pd.DataFrame, pca: pd
         "Figure 4. Residual RMS in vol bp. Joint calibration pays local residual for consistency.",
     )
     y = _draw_subhead(ax, "Static-Arbitrage Counts", 0.08, 0.455)
-    y = _draw_table(ax, _arb_table(arb), 0.08, y)
+    y = _draw_table(ax, _mpl_arb_table(arb), 0.08, y)
     _draw_wrapped(
         ax,
         "The noisy per-slice fit now has genuine residuals instead of a meaningless 1e-12 "
@@ -874,7 +1538,7 @@ def _body_pages(pdf: PdfPages, summary: pd.DataFrame, arb: pd.DataFrame, pca: pd
         47,
     )
     y_left = _draw_subhead(ax, "Cosine Similarity", 0.08, y_left)
-    _draw_table(ax, _pca_table(pca), 0.08, y_left)
+    _draw_table(ax, _mpl_pca_table(pca), 0.08, y_left)
     y_right = _draw_subhead(ax, "What This Validates", 0.54, 0.875)
     y_right = _draw_wrapped(
         ax,
@@ -1135,7 +1799,7 @@ def _body_pages(pdf: PdfPages, summary: pd.DataFrame, arb: pd.DataFrame, pca: pd
         "Figure 8. Small multiples keep the same x-axis while showing each strategy separately.",
     )
     y = _draw_subhead(ax, "Tail-Risk Table ($mm)", 0.08, 0.500)
-    _draw_table(ax, _tail_table(summary), 0.08, y, row_h=0.027)
+    _draw_table(ax, _mpl_tail_table(summary), 0.08, y, row_h=0.027)
     _draw_wrapped(
         ax,
         "The same-axis overlay in the executive summary is the headline picture. These small "
@@ -1324,13 +1988,23 @@ def _fallback_pdf(settings: Settings) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build the PDF report.")
     parser.add_argument("--config", default="configs/default.yaml")
+    parser.add_argument(
+        "--fallback-matplotlib",
+        action="store_true",
+        help="Use the emergency Matplotlib renderer instead of HTML/CSS PDF output.",
+    )
     args = parser.parse_args()
     settings = load_settings(args.config)
     ensure_dirs()
     _write_latex_sources(settings)
-    if not _try_xelatex():
+    if args.fallback_matplotlib:
         _fallback_pdf(settings)
+        renderer = "matplotlib"
+    else:
+        html = _render_report_html(settings)
+        renderer = _write_pdf_weasyprint(html)
     size = (REPORT_DIR / "report.pdf").stat().st_size
+    print(f"renderer: {renderer}")
     print(f"wrote {REPORT_DIR / 'report.pdf'} ({size} bytes)")
 
 

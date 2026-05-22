@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cross-Cube Vega Hedging</title>
+  <link rel="stylesheet" href="style/report.css">
+</head>
+<body>
+  <section class="cover">
+    <h1 class="cover-title">Cross-Cube Vega Hedging</h1>
+    <p class="cover-subtitle">A Swaption Market-Making Lab</p>
+    <div class="cover-rule"></div>
+    <div class="cover-author">
+      <strong>Imran Hakim</strong>
+      <span>Independent research — portfolio artefact</span>
+      <span>May 2026</span>
+    </div>
+    <svg class="cover-cube" viewBox="0 0 280 280" aria-label="silver wireframe cube" xmlns="http://www.w3.org/2000/svg">
+      <line x1="54" y1="82" x2="180" y2="82" stroke="#b8b8b8" stroke-width="2" opacity="0.20"/>
+      <line x1="180" y1="82" x2="180" y2="208" stroke="#b8b8b8" stroke-width="2" opacity="0.20"/>
+      <line x1="180" y1="208" x2="54" y2="208" stroke="#b8b8b8" stroke-width="2" opacity="0.20"/>
+      <line x1="54" y1="208" x2="54" y2="82" stroke="#b8b8b8" stroke-width="2" opacity="0.20"/>
+      <line x1="100" y1="36" x2="226" y2="36" stroke="#b8b8b8" stroke-width="2" opacity="0.20"/>
+      <line x1="226" y1="36" x2="226" y2="162" stroke="#b8b8b8" stroke-width="2" opacity="0.20"/>
+      <line x1="226" y1="162" x2="100" y2="162" stroke="#b8b8b8" stroke-width="2" opacity="0.20"/>
+      <line x1="100" y1="162" x2="100" y2="36" stroke="#b8b8b8" stroke-width="2" opacity="0.20"/>
+      <line x1="54" y1="82" x2="100" y2="36" stroke="#b8b8b8" stroke-width="2" opacity="0.20"/>
+      <line x1="180" y1="82" x2="226" y2="36" stroke="#b8b8b8" stroke-width="2" opacity="0.20"/>
+      <line x1="180" y1="208" x2="226" y2="162" stroke="#b8b8b8" stroke-width="2" opacity="0.20"/>
+      <line x1="54" y1="208" x2="100" y2="162" stroke="#b8b8b8" stroke-width="2" opacity="0.20"/>
+    </svg>
+  </section>
+
+  {% for page in pages %}
+  <section class="sheet">
+    <header class="page-header">
+      <span>CROSS-CUBE VEGA HEDGING</span>
+      <span class="page-number">{{ loop.index + 1 }}</span>
+    </header>
+    <main class="content">
+      <h1>{{ page.title }}</h1>
+      {% if page.architecture %}
+      <figure>
+        {% include "_architecture.svg" %}
+        <figcaption>Pipeline from simulated cube construction to calibration, factor analytics, market-making, and P&amp;L attribution.</figcaption>
+      </figure>
+      {% endif %}
+      {{ page.body | safe }}
+    </main>
+    <footer class="page-footer">Imran Hakim · v0.1</footer>
+  </section>
+  {% endfor %}
+</body>
+</html>

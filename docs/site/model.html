@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Model</title>
   <link rel="stylesheet" href="assets/tufte.css">
+  <link rel="stylesheet" href="assets/report.css">
   <style>
 :root {
   --charcoal: #1a1a1a;
@@ -27,7 +28,7 @@ main {
   padding: 3rem 2rem 5rem 0;
 }
 nav, footer {
-  font-family: "Source Sans Pro", Inter, Arial, sans-serif;
+  font-family: "Source Sans 3", Inter, Arial, sans-serif;
   color: var(--graphite);
   padding: 1rem 8%;
 }
@@ -42,7 +43,7 @@ nav a, footer a {
   text-decoration: none;
 }
 h1, h2 {
-  font-family: "Source Sans Pro", Inter, Arial, sans-serif;
+  font-family: "Source Sans 3", Inter, Arial, sans-serif;
   font-weight: 600;
   letter-spacing: 0;
   color: var(--oxblood);
@@ -78,7 +79,7 @@ p {
 table {
   border-collapse: collapse;
   max-width: 64rem;
-  font-family: "Source Sans Pro", Inter, Arial, sans-serif;
+  font-family: "Source Sans 3", Inter, Arial, sans-serif;
   font-size: 14px;
 }
 th, td {
@@ -99,7 +100,7 @@ img {
 }
 </style>
 </head>
-<body>
+<body class="site-page">
 <nav>
   <a href="index.html">Executive summary</a>
   <a href="model.html">Model</a>
@@ -111,6 +112,7 @@ img {
         <p>The simulator evolves ATM log-volatility through smooth level, slope, and curvature
         loadings over the expiry-tenor grid. SABR rho is bounded in [-0.95, 0.0], log-nu mean
         reverts, and both are correlated with the level shock.</p>
+        <img src="static/architecture.svg" alt="Architecture diagram">
         <img src="assets/atm_cube_snapshots.png" alt="ATM cube snapshots">
         <h2>Calibration Diagnostics</h2>
         <img src="assets/calibration_residual_heatmaps.png" alt="Calibration residuals">

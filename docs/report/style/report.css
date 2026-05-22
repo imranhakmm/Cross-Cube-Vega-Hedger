@@ -1,0 +1,381 @@
+@font-face {
+  font-family: "EB Garamond";
+  src: url("fonts/EBGaramond.ttf") format("truetype");
+  font-weight: 400 800;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "EB Garamond";
+  src: url("fonts/EBGaramond-Italic.ttf") format("truetype");
+  font-weight: 400 800;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  src: url("fonts/SourceSans3.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("fonts/JetBrainsMono.ttf") format("truetype");
+  font-weight: 100 800;
+  font-style: normal;
+}
+
+:root {
+  --charcoal: #1a1a1a;
+  --graphite: #3a3a3a;
+  --silver: #b8b8b8;
+  --off-white: #f5f5f5;
+  --teal: #2f5d56;
+  --oxblood: #7a2e2e;
+  --muted: #888888;
+  --light-rule: #d8d8d8;
+}
+
+@page {
+  size: Letter;
+  margin: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--off-white);
+  color: var(--charcoal);
+  font-family: "EB Garamond", serif;
+  font-size: 11pt;
+  line-height: 1.32;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.cover,
+.sheet {
+  width: 8.5in;
+  height: 11in;
+  position: relative;
+  page-break-after: always;
+  break-after: page;
+  overflow: hidden;
+}
+
+.sheet:last-child {
+  page-break-after: auto;
+  break-after: auto;
+}
+
+.cover {
+  background: var(--charcoal);
+  color: var(--silver);
+}
+
+.cover-title {
+  position: absolute;
+  left: 0.72in;
+  top: 2.45in;
+  margin: 0;
+  color: var(--silver);
+  font-family: "EB Garamond", serif;
+  font-size: 48pt;
+  font-weight: 500;
+  line-height: 0.92;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.cover-subtitle {
+  position: absolute;
+  left: 0.75in;
+  top: 3.30in;
+  margin: 0;
+  color: var(--muted);
+  font-family: "EB Garamond", serif;
+  font-size: 24pt;
+  font-style: italic;
+  line-height: 1;
+}
+
+.cover-rule {
+  position: absolute;
+  left: 0.76in;
+  top: 3.86in;
+  width: 4.35in;
+  border-top: 0.5pt solid rgba(184, 184, 184, 0.50);
+}
+
+.cover-author {
+  position: absolute;
+  left: 0.95in;
+  bottom: 0.88in;
+  color: #d7d7d7;
+  font-family: "Source Sans 3", sans-serif;
+}
+
+.cover-author strong {
+  display: block;
+  color: #eeeeee;
+  font-size: 14pt;
+  font-weight: 600;
+  margin-bottom: 0.16in;
+}
+
+.cover-author span {
+  display: block;
+  color: #a8a8a8;
+  font-size: 11pt;
+  line-height: 1.45;
+}
+
+.cover-cube {
+  position: absolute;
+  right: 0.56in;
+  bottom: 0.60in;
+  width: 30%;
+  height: auto;
+}
+
+.sheet {
+  background: white;
+  padding: 0.78in 0.80in 0.70in;
+}
+
+.page-header {
+  position: absolute;
+  top: 0.34in;
+  left: 0.80in;
+  right: 0.80in;
+  height: 0.24in;
+  border-bottom: 0.4pt solid var(--silver);
+  color: var(--graphite);
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 9pt;
+  font-variant-caps: small-caps;
+  letter-spacing: 0.02em;
+}
+
+.page-header .page-number {
+  float: right;
+  font-variant-caps: normal;
+}
+
+.page-footer {
+  position: absolute;
+  bottom: 0.32in;
+  left: 0.80in;
+  right: 0.80in;
+  color: #8a8a8a;
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 9pt;
+}
+
+.content {
+  height: 9.28in;
+}
+
+h1,
+h2,
+h3 {
+  font-family: "Source Sans 3", sans-serif;
+  color: var(--charcoal);
+  letter-spacing: 0;
+  margin: 0;
+}
+
+h1 {
+  font-size: 16pt;
+  line-height: 1.08;
+  margin-bottom: 0.20in;
+}
+
+h2 {
+  color: var(--oxblood);
+  font-size: 11.5pt;
+  font-weight: 700;
+  margin: 0.12in 0 0.045in;
+}
+
+p {
+  margin: 0 0 0.105in;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 0.42in;
+}
+
+.wide-text {
+  max-width: 6.75in;
+}
+
+.lede {
+  color: var(--graphite);
+  font-size: 12.8pt;
+  line-height: 1.32;
+}
+
+.callout {
+  border-left: 3pt solid var(--silver);
+  color: var(--graphite);
+  padding-left: 0.16in;
+}
+
+figure {
+  margin: 0.10in 0 0.16in;
+}
+
+figure img {
+  display: block;
+  width: 100%;
+  max-height: 4.10in;
+  object-fit: contain;
+}
+
+.figure-small img {
+  max-height: 3.15in;
+}
+
+.figure-tiny img {
+  max-height: 2.35in;
+}
+
+figcaption {
+  color: var(--graphite);
+  font-family: "EB Garamond", serif;
+  font-size: 10pt;
+  font-style: italic;
+  margin-top: 0.045in;
+}
+
+.architecture-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.equation {
+  display: block;
+  width: 92%;
+  max-height: 0.52in;
+  margin: 0.08in auto 0.14in;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+  margin: 0.08in 0 0.18in;
+  border-top: 1pt solid var(--charcoal);
+  border-bottom: 1pt solid var(--charcoal);
+  font-family: "EB Garamond", serif;
+  font-size: 11pt;
+}
+
+thead tr {
+  border-bottom: 0.5pt solid var(--charcoal);
+}
+
+th {
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 11pt;
+  font-weight: 650;
+}
+
+th,
+td {
+  padding: 0.30em 0.50em;
+  vertical-align: top;
+  text-align: right;
+  white-space: nowrap;
+}
+
+th:first-child,
+td:first-child {
+  text-align: left;
+}
+
+tbody tr:nth-child(even) {
+  background: var(--off-white);
+}
+
+.references p {
+  padding-left: 0.18in;
+  text-indent: -0.18in;
+}
+
+.site-page main {
+  max-width: 72rem;
+  margin-left: 8%;
+  padding: 3rem 2rem 5rem 0;
+}
+
+.site-page nav,
+.site-page footer {
+  color: var(--graphite);
+  font-family: "Source Sans 3", sans-serif;
+  padding: 1rem 8%;
+}
+
+.site-page nav {
+  border-bottom: 1px solid var(--silver);
+}
+
+.site-page footer {
+  border-top: 1px solid var(--silver);
+  font-size: 0.9rem;
+}
+
+.site-page nav a,
+.site-page footer a {
+  color: var(--oxblood);
+  margin-right: 1.2rem;
+  text-decoration: none;
+}
+
+.site-page p {
+  max-width: 60ch;
+}
+
+.site-page h1 {
+  color: var(--oxblood);
+  font-size: 2.6rem;
+  margin: 2rem 0 0.8rem;
+}
+
+.site-page h2 {
+  border-top: 1px solid var(--silver);
+  color: var(--oxblood);
+  margin-top: 2.8rem;
+  padding-top: 1rem;
+}
+
+.site-page .note {
+  border-left: 3px solid var(--silver);
+  color: var(--graphite);
+  float: right;
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 0 0 24px 28px;
+  padding-left: 14px;
+  width: 220px;
+}
+
+.site-page img {
+  height: auto;
+  margin: 1.2rem 0;
+  max-width: 100%;
+}
+
+.plotly-graph-div {
+  max-width: 64rem;
+}
