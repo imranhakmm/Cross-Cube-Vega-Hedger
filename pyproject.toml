@@ -1,0 +1,84 @@
+[build-system]
+requires = ["hatchling>=1,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cross-cube-vega"
+version = "0.1.0"
+description = "Cross-Cube Vega Hedging: A Swaption Market-Making Lab"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+license = { text = "MIT" }
+authors = [
+  { name = "Imran Hakim", email = "imranhakmm@gmail.com" }
+]
+keywords = ["quantitative-finance", "swaption", "sabr", "volatility", "hedging"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Financial and Insurance Industry",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+  "numpy>=1,<3",
+  "scipy>=1,<2",
+  "pandas>=2,<3",
+  "matplotlib>=3,<4",
+  "plotly>=5,<7",
+  "scikit-learn>=1,<2",
+  "pydantic>=2,<3",
+  "pyyaml>=6,<7",
+  "numba>=0,<1",
+  "jinja2>=3,<4",
+]
+
+[project.urls]
+Homepage = "https://github.com/imranhakmm/Cross-Cube-Vega-Hedger"
+Repository = "https://github.com/imranhakmm/Cross-Cube-Vega-Hedger"
+LinkedIn = "https://www.linkedin.com/in/imran-hakim-0a76111a3/"
+
+[project.scripts]
+cxvega-calibration-diag = "scripts.run_calibration_diag:main"
+cxvega-pca-recovery = "scripts.run_pca_recovery:main"
+cxvega-mm-simulation = "scripts.run_mm_simulation:main"
+cxvega-generate-figures = "scripts.generate_figures:main"
+cxvega-build-site = "scripts.build_html_site:main"
+cxvega-build-report = "scripts.build_pdf_report:main"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+  "ruff>=0,<1",
+  "mypy>=1,<2",
+  "types-PyYAML>=6,<7",
+]
+viz = [
+  "kaleido>=0,<1",
+]
+docs = [
+  "jinja2>=3,<4",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cxvega"]
+include = ["scripts"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+pretty = true
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = [
+  "matplotlib.*",
+  "plotly.*",
+  "scipy.*",
+  "sklearn.*",
+]
+ignore_missing_imports = true

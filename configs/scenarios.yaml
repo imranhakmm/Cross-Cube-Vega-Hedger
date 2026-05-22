@@ -1,0 +1,15 @@
+baseline:
+  description: "Default factor-volatility market with moderate skew-level coupling."
+  overrides: {}
+high_correlation:
+  description: "Skew and level factors more tightly coupled; naive node hedges leak more."
+  overrides:
+    simulator:
+      rho_level_corr: -0.70
+      nu_level_corr: 0.45
+tighter_spreads:
+  description: "Execution edge compresses; hedging costs become a larger fraction of P&L."
+  overrides:
+    market_maker:
+      base_half_spread_vol_bps: 0.45
+      hedge_cost_vol_bps: 0.25

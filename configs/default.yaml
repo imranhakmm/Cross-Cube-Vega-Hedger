@@ -1,0 +1,51 @@
+seed: 1729
+calendar:
+  steps_per_year: 252
+  simulation_years: 5.0
+  mm_days: 252
+  n_paths: 1000
+cube:
+  expiries_years: [0.0833333333, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0]
+  expiry_labels: ["1m", "3m", "6m", "1y", "2y", "5y", "10y"]
+  tenors_years: [1.0, 2.0, 5.0, 10.0]
+  tenor_labels: ["1y", "2y", "5y", "10y"]
+  strike_offsets_bps: [-100, -50, -25, 0, 25, 50, 100]
+  beta: 0.5
+rates:
+  flat_discount_rate: 0.035
+  forward_level: 0.0325
+  forward_slope: 0.002
+  forward_curvature: -0.001
+simulator:
+  ou_kappa: [1.4, 0.9, 1.8]
+  ou_vol: [0.12, 0.08, 0.055]
+  ou_corr:
+    - [1.0, 0.35, -0.15]
+    - [0.35, 1.0, 0.10]
+    - [-0.15, 0.10, 1.0]
+  rho_kappa: 2.2
+  rho_vol: 0.12
+  rho_mean: -0.35
+  nu_kappa: 1.6
+  nu_vol: 0.18
+  nu_mean: 0.55
+  rho_level_corr: -0.45
+  nu_level_corr: 0.30
+calibration:
+  joint_smoothness_weight: 0.035
+  joint_butterfly_weight: 0.50
+  joint_calendar_weight: 0.25
+market_maker:
+  n_paths: 1000
+  days: 252
+  daily_arrival_rate: 7.0
+  notional_mean: 8.0e7
+  notional_sigma: 0.65
+  base_half_spread_vol_bps: 0.75
+  hedge_cost_vol_bps: 0.35
+  risk_aversion: 0.85
+  shock_scale: 0.85
+  liquid_expiry_indices: [1, 3, 4, 5, 6]
+  liquid_tenor_indices: [1, 2, 3]
+report:
+  run_label: "baseline"
